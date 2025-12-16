@@ -1,0 +1,40 @@
+[
+  {
+    "id": "basic-tutorial",
+    "config": {
+      "src\\petstore\\state-audit-cron.step.ts": {
+        "x": 228,
+        "y": -13
+      },
+      "src\\petstore\\process-food-order.step.ts": {
+        "x": 226,
+        "y": 220
+      },
+      "src\\petstore\\notification.step.ts": {
+        "x": 711,
+        "y": 167
+      },
+      "src\\petstore\\api.step.ts": {
+        "x": -158,
+        "y": 91
+      }
+    }
+  },
+  {
+    "id": "erasure-workflow",
+    "config": {
+      "src\\gdpr\\api\\override-erasure-request.step.ts": {
+        "x": -1,
+        "y": -6
+      },
+      "src\\gdpr\\api\\get-erasure-status.step.ts": {
+        "x": 2,
+        "y": 243
+      },
+      "src\\gdpr\\api\\create-erasure-request.step.ts": {
+        "x": 0,
+        "y": 468
+      }
+    }
+  }
+]

@@ -10,50 +10,41 @@ class WorkflowStateError extends Error {
 
 // Configuration constants (inline to avoid import issues)
 const ghostProtocolConfig = {
+  workflow: {
+    maxRetryAttempts: 3,
+    initialRetryDelay: 1000,
+    retryBackoffMultiplier: 2
+  },
   externalSystems: {
-    intercom: {
-      timeout: 15000,
+    crm: {
+      timeout: 20000,
       maxRetries: 3
     }
   }
 }
 
-// Input schema for Intercom deletion event
-const IntercomDeletionInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+// Input schema for CRM deletion event
+const CRMDeletionInputSchema = z.object({
+  workflowId: z.string().uuid(),
   userIdentifiers: z.object({
     userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email('Invalid email format')),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone format')),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
     aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
   }),
-  stepName: z.string().default('intercom-deletion'),
+  stepName: z.string().default('crm-deletion'),
   attempt: z.number().int().min(1, 'Attempt must be positive').default(1)
 })
 
-// Response schema for Intercom deletion
-const IntercomDeletionResponseSchema = z.object({
-  success: z.boolean(),
-  stepName: z.string(),
-  evidence: z.object({
-    receipt: z.string().optional(),
-    timestamp: z.string().datetime(),
-    apiResponse: z.any().optional()
-  }),
-  shouldRetry: z.boolean().default(false),
-  nextAttempt: z.number().int().optional()
-})
-
-export const config: EventRouteConfig = {
-  name: 'IntercomDeletion',
-  type: 'event',
-  topic: 'intercom-deletion',
-  description: 'Delete conversation and user data from Intercom with retry logic',
+export const config = {
+  name: 'CRMDeletion',
+  type: 'event' as const,
+  description: 'Delete customer records from CRM system with retry logic',
+  subscribes: ['crm-deletion'],
   emits: [
     {
       topic: 'step-completed',
-      label: 'Step Completed',
-      conditional: false
+      label: 'Step Completed'
     },
     {
       topic: 'step-failed',
@@ -62,8 +53,7 @@ export const config: EventRouteConfig = {
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     },
     {
       topic: 'parallel-step-completed',
@@ -71,16 +61,14 @@ export const config: EventRouteConfig = {
       conditional: true
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: IntercomDeletionInputSchema,
-  outputSchema: IntercomDeletionResponseSchema
+  input: CRMDeletionInputSchema
 }
 
-export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger, state }) => {
-  const { workflowId, userIdentifiers, stepName, attempt } = IntercomDeletionInputSchema.parse(data)
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+  const { workflowId, userIdentifiers, stepName, attempt } = CRMDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
-  logger.info('Starting Intercom deletion', { 
+  logger.info('Starting CRM deletion', { 
     workflowId, 
     userId: userIdentifiers.userId,
     stepName,
@@ -98,7 +86,7 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
     if (!workflowState.identityCriticalCompleted) {
       throw new WorkflowStateError(
         workflowId,
-        `Intercom deletion cannot proceed: Identity-critical checkpoint not completed`
+        `CRM deletion cannot proceed: Identity-critical checkpoint not completed`
       )
     }
 
@@ -122,25 +110,25 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
     // Save updated state
     await state.set(`workflow:${workflowId}`, workflowState)
 
-    // Perform Intercom deletion
-    const intercomResult = await performIntercomDeletion(userIdentifiers, logger)
+    // Perform CRM deletion
+    const crmResult = await performCRMDeletion(userIdentifiers, logger)
 
-    if (intercomResult.success) {
+    if (crmResult.success) {
       // Update step to completed
       workflowState.steps[stepName].status = 'DELETED'
       workflowState.steps[stepName].evidence = {
-        receipt: intercomResult.receipt,
+        receipt: crmResult.receipt,
         timestamp,
-        apiResponse: intercomResult.apiResponse
+        apiResponse: crmResult.apiResponse
       }
 
       // Save updated state
       await state.set(`workflow:${workflowId}`, workflowState)
 
-      logger.info('Intercom deletion completed successfully', { 
+      logger.info('CRM deletion completed successfully', { 
         workflowId, 
         userId: userIdentifiers.userId,
-        receipt: intercomResult.receipt 
+        receipt: crmResult.receipt 
       })
 
       // Emit step completion
@@ -159,7 +147,7 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
       await emit({
         topic: 'audit-log',
         data: {
-          event: 'INTERCOM_DELETION_COMPLETED',
+          event: 'CRM_DELETION_COMPLETED',
           workflowId,
           stepName,
           userIdentifiers,
@@ -196,26 +184,26 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
         const retryDelay = ghostProtocolConfig.workflow.initialRetryDelay * 
           Math.pow(ghostProtocolConfig.workflow.retryBackoffMultiplier, attempt - 1)
 
-        logger.warn('Intercom deletion failed, will retry', { 
+        logger.warn('CRM deletion failed, will retry', { 
           workflowId, 
           userId: userIdentifiers.userId,
           attempt,
           nextAttempt,
           retryDelay,
-          error: intercomResult.error 
+          error: crmResult.error 
         })
 
         // Update step with failure but keep in progress for retry
         workflowState.steps[stepName].evidence = {
           timestamp,
-          apiResponse: intercomResult.apiResponse
+          apiResponse: crmResult.apiResponse
         }
         await state.set(`workflow:${workflowId}`, workflowState)
 
         // Schedule retry with exponential backoff
         setTimeout(async () => {
           await emit({
-            topic: 'intercom-deletion',
+            topic: 'crm-deletion',
             data: {
               workflowId,
               userIdentifiers,
@@ -238,15 +226,15 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
         workflowState.steps[stepName].status = 'FAILED'
         workflowState.steps[stepName].evidence = {
           timestamp,
-          apiResponse: intercomResult.apiResponse
+          apiResponse: crmResult.apiResponse
         }
         await state.set(`workflow:${workflowId}`, workflowState)
 
-        logger.error('Intercom deletion failed after max retries', { 
+        logger.error('CRM deletion failed after max retries', { 
           workflowId, 
           userId: userIdentifiers.userId,
           maxRetries,
-          error: intercomResult.error 
+          error: crmResult.error 
         })
 
         // Emit step failure
@@ -256,7 +244,7 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
             workflowId,
             stepName,
             status: 'FAILED',
-            error: intercomResult.error,
+            error: crmResult.error,
             evidence: workflowState.steps[stepName].evidence,
             timestamp,
             requiresManualIntervention: false // Non-critical system
@@ -267,11 +255,11 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
         await emit({
           topic: 'audit-log',
           data: {
-            event: 'INTERCOM_DELETION_FAILED',
+            event: 'CRM_DELETION_FAILED',
             workflowId,
             stepName,
             userIdentifiers,
-            error: intercomResult.error,
+            error: crmResult.error,
             evidence: workflowState.steps[stepName].evidence,
             timestamp,
             requiresManualIntervention: false
@@ -300,7 +288,7 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
     }
 
   } catch (error) {
-    logger.error('Intercom deletion step failed with exception', { 
+    logger.error('CRM deletion step failed with exception', { 
       workflowId, 
       userId: userIdentifiers.userId,
       error: error.message 
@@ -324,10 +312,10 @@ export const handler: Handlers['IntercomDeletion'] = async (data, { emit, logger
 }
 
 /**
- * Perform actual Intercom deletion (mock implementation for now)
- * In production, this would integrate with the real Intercom API
+ * Perform actual CRM deletion (mock implementation for now)
+ * In production, this would integrate with the real CRM API (Salesforce, HubSpot, etc.)
  */
-async function performIntercomDeletion(
+async function performCRMDeletion(
   userIdentifiers: any, 
   logger: any
 ): Promise<{
@@ -337,49 +325,51 @@ async function performIntercomDeletion(
   error?: string
 }> {
   try {
-    logger.info('Calling Intercom API to delete user and conversations', { 
+    logger.info('Calling CRM API to delete customer records', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
     // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 300))
 
-    // Mock successful response (85% success rate for testing)
-    const isSuccess = Math.random() > 0.15
+    // Mock successful response (80% success rate for testing)
+    const isSuccess = Math.random() > 0.20
 
     if (isSuccess) {
-      const receipt = `intercom_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
+      const receipt = `crm_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
       return {
         success: true,
         receipt,
         apiResponse: {
           user_id: userIdentifiers.userId,
-          deleted_conversations: Math.floor(Math.random() * 10) + 1,
-          deleted_user_data: true,
-          deleted_segments: Math.floor(Math.random() * 3),
+          deleted_contacts: 1,
+          deleted_opportunities: Math.floor(Math.random() * 3),
+          deleted_activities: Math.floor(Math.random() * 15) + 5,
+          deleted_notes: Math.floor(Math.random() * 8),
+          archived_deals: Math.floor(Math.random() * 2),
           timestamp: new Date().toISOString()
         }
       }
     } else {
       return {
         success: false,
-        error: 'Intercom API returned error: User deletion failed',
+        error: 'CRM API returned error: Contact has active deals',
         apiResponse: {
           error: {
-            type: 'api_error',
-            message: 'User not found or already deleted',
-            code: 'user_not_found'
+            type: 'business_rule_violation',
+            message: 'Cannot delete contact with active deals',
+            code: 'active_deals_exist'
           }
         }
       }
     }
 
   } catch (error) {
-    logger.error('Intercom API call failed', { error: error.message })
+    logger.error('CRM API call failed', { error: error.message })
     return {
       success: false,
-      error: `Intercom API exception: ${error.message}`,
+      error: `CRM API exception: ${error.message}`,
       apiResponse: { exception: error.message }
     }
   }

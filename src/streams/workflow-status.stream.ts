@@ -31,7 +31,7 @@ export const workflowStatusUpdateSchema = z.object({
     'FAILED',
     'LEGAL_HOLD'
   ]).optional(),
-  metadata: z.record(z.any()).optional()
+  metadata: z.record(z.string(), z.unknown()).optional()
 })
 
 export type WorkflowStatusUpdate = z.infer<typeof workflowStatusUpdateSchema>

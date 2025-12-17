@@ -19,40 +19,26 @@ const ghostProtocolConfig = {
 
 // Input schema for Database deletion event
 const DatabaseDeletionInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+  workflowId: z.string().uuid(),
   userIdentifiers: z.object({
     userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email('Invalid email format')),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone format')),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
     aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
   }),
   stepName: z.string().default('database-deletion'),
   attempt: z.number().int().min(1, 'Attempt must be positive').default(1)
 })
 
-// Response schema for Database deletion
-const DatabaseDeletionResponseSchema = z.object({
-  success: z.boolean(),
-  stepName: z.string(),
-  evidence: z.object({
-    receipt: z.string().optional(),
-    timestamp: z.string().datetime(),
-    apiResponse: z.any().optional()
-  }),
-  shouldRetry: z.boolean().default(false),
-  nextAttempt: z.number().int().optional()
-})
-
-export const config: EventRouteConfig = {
+export const config = {
   name: 'DatabaseDeletion',
-  type: 'event',
-  topic: 'database-deletion',
+  type: 'event' as const,
   description: 'Delete user records from database with transaction hash recording',
+  subscribes: ['database-deletion'],
   emits: [
     {
       topic: 'step-completed',
-      label: 'Step Completed',
-      conditional: false
+      label: 'Step Completed'
     },
     {
       topic: 'step-failed',
@@ -61,8 +47,7 @@ export const config: EventRouteConfig = {
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     },
     {
       topic: 'checkpoint-validation',
@@ -70,12 +55,10 @@ export const config: EventRouteConfig = {
       conditional: true
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: DatabaseDeletionInputSchema,
-  outputSchema: DatabaseDeletionResponseSchema
+  input: DatabaseDeletionInputSchema
 }
 
-export const handler: Handlers['DatabaseDeletion'] = async (data, { emit, logger, state }) => {
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
   const { workflowId, userIdentifiers, stepName, attempt } = DatabaseDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 

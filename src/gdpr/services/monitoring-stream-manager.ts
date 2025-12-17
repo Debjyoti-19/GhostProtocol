@@ -13,7 +13,7 @@ import {
   WorkflowStatusUpdate,
   ErrorNotification,
   CompletionNotification
-} from '../streams/index.js'
+} from '../../streams/index.js'
 import { 
   WorkflowState, 
   WorkflowStatus, 
@@ -90,17 +90,18 @@ export class MonitoringStreamManager {
     const updateId = uuidv4()
     const timestamp = new Date().toISOString()
 
-    const statusUpdate: WorkflowStatusUpdate = {
+    const statusUpdate: any = {
       id: updateId,
       workflowId,
       timestamp,
       type,
-      status,
-      stepName: options.stepName,
-      stepStatus: options.stepStatus,
-      progress: options.progress,
-      metadata: options.metadata
+      status
     }
+    
+    if (options.stepName !== undefined) statusUpdate.stepName = options.stepName
+    if (options.stepStatus !== undefined) statusUpdate.stepStatus = options.stepStatus
+    if (options.progress !== undefined) statusUpdate.progress = options.progress
+    if (options.metadata !== undefined) statusUpdate.metadata = options.metadata
 
     try {
       // Store in stream with workflowId as groupId and updateId as itemId

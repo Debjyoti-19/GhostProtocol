@@ -10,8 +10,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fc from 'fast-check'
 import { v4 as uuidv4 } from 'uuid'
-import { MonitoringStreamManager, StreamContext } from '../services/monitoring-stream-manager.js'
-import { CompletionNotification } from '../streams/index.js'
+import { MonitoringStreamManager, StreamContext } from '../../../src/gdpr/services/monitoring-stream-manager.js'
+import { CompletionNotification } from '../../../src/streams/index.js'
 import { 
   WorkflowState, 
   WorkflowStatus, 
@@ -21,7 +21,7 @@ import {
   DataLineageSnapshot,
   BackgroundJob,
   LegalHold
-} from '../types/index.js'
+} from '../../../src/gdpr/types/index.js'
 
 // Mock stream implementation for testing
 class MockStream {

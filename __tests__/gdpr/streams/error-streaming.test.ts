@@ -11,8 +11,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fc from 'fast-check'
 import { v4 as uuidv4 } from 'uuid'
-import { MonitoringStreamManager, StreamContext, ErrorContext, RemediationInfo, ErrorImpact } from '../services/monitoring-stream-manager.js'
-import { ErrorNotification } from '../streams/index.js'
+import { MonitoringStreamManager, StreamContext, ErrorContext, RemediationInfo, ErrorImpact } from '../../../src/gdpr/services/monitoring-stream-manager.js'
+import { ErrorNotification } from '../../../src/streams/index.js'
 
 // Mock stream implementation for testing
 class MockStream {

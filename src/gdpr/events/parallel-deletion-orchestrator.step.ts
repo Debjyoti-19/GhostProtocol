@@ -10,63 +10,47 @@ class WorkflowStateError extends Error {
 
 // Input schema for Parallel Deletion Orchestrator event
 const ParallelDeletionOrchestratorInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+  workflowId: z.string().uuid(),
   userIdentifiers: z.object({
     userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email('Invalid email format')),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone format')),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
     aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
   }),
   parallelSteps: z.array(z.string().min(1, 'Step name cannot be empty'))
 })
 
-// Response schema for Parallel Deletion Orchestrator
-const ParallelDeletionOrchestratorResponseSchema = z.object({
-  success: z.boolean(),
-  workflowId: z.string(),
-  phase: z.string(),
-  triggeredSteps: z.array(z.string()),
-  timestamp: z.string().datetime()
-})
-
-export const config: EventRouteConfig = {
+export const config = {
   name: 'ParallelDeletionOrchestrator',
-  type: 'event',
-  topic: 'parallel-deletion-trigger',
+  type: 'event' as const,
   description: 'Orchestrate parallel deletion steps for non-critical systems after identity-critical checkpoint',
+  subscribes: ['parallel-deletion-trigger'],
   emits: [
     {
       topic: 'intercom-deletion',
-      label: 'Trigger Intercom Deletion',
-      conditional: false
+      label: 'Trigger Intercom Deletion'
     },
     {
       topic: 'sendgrid-deletion',
-      label: 'Trigger SendGrid Deletion',
-      conditional: false
+      label: 'Trigger SendGrid Deletion'
     },
     {
       topic: 'crm-deletion',
-      label: 'Trigger CRM Deletion',
-      conditional: false
+      label: 'Trigger CRM Deletion'
     },
     {
       topic: 'analytics-deletion',
-      label: 'Trigger Analytics Deletion',
-      conditional: false
+      label: 'Trigger Analytics Deletion'
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: ParallelDeletionOrchestratorInputSchema,
-  outputSchema: ParallelDeletionOrchestratorResponseSchema
+  input: ParallelDeletionOrchestratorInputSchema
 }
 
-export const handler: Handlers['ParallelDeletionOrchestrator'] = async (data, { emit, logger, state }) => {
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
   const { workflowId, userIdentifiers, parallelSteps } = ParallelDeletionOrchestratorInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -175,19 +159,12 @@ export const handler: Handlers['ParallelDeletionOrchestrator'] = async (data, { 
       triggeredSteps 
     })
 
-    return {
-      success: true,
-      workflowId,
-      phase: 'parallel-deletion',
-      triggeredSteps,
-      timestamp
-    }
-
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Parallel deletion orchestration failed', { 
       workflowId, 
       userId: userIdentifiers.userId,
-      error: error.message 
+      error: errorMessage 
     })
 
     // Emit audit log for orchestration failure
@@ -197,8 +174,8 @@ export const handler: Handlers['ParallelDeletionOrchestrator'] = async (data, { 
         event: 'PARALLEL_DELETION_ORCHESTRATION_FAILED',
         workflowId,
         userIdentifiers,
-        error: error.message,
-        timestamp
+        error: errorMessage,
+        timestamp: new Date().toISOString()
       }
     })
 

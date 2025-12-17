@@ -37,7 +37,7 @@ export const errorNotificationSchema = z.object({
     retryable: z.boolean(),
     escalationRequired: z.boolean()
   }),
-  metadata: z.record(z.any()).optional()
+  metadata: z.record(z.string(), z.unknown()).optional()
 })
 
 export type ErrorNotification = z.infer<typeof errorNotificationSchema>

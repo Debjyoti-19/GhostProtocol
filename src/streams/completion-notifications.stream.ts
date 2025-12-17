@@ -42,7 +42,7 @@ export const completionNotificationSchema = z.object({
     policyVersion: z.string(),
     zombieCheckScheduled: z.boolean()
   }),
-  metadata: z.record(z.any()).optional()
+  metadata: z.record(z.string(), z.unknown()).optional()
 })
 
 export type CompletionNotification = z.infer<typeof completionNotificationSchema>

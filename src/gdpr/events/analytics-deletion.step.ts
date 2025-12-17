@@ -10,6 +10,11 @@ class WorkflowStateError extends Error {
 
 // Configuration constants (inline to avoid import issues)
 const ghostProtocolConfig = {
+  workflow: {
+    maxRetryAttempts: 3,
+    initialRetryDelay: 1000,
+    retryBackoffMultiplier: 2
+  },
   externalSystems: {
     analytics: {
       timeout: 25000,
@@ -20,40 +25,26 @@ const ghostProtocolConfig = {
 
 // Input schema for Analytics deletion event
 const AnalyticsDeletionInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+  workflowId: z.string().uuid(),
   userIdentifiers: z.object({
     userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email('Invalid email format')),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone format')),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
     aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
   }),
   stepName: z.string().default('analytics-deletion'),
   attempt: z.number().int().min(1, 'Attempt must be positive').default(1)
 })
 
-// Response schema for Analytics deletion
-const AnalyticsDeletionResponseSchema = z.object({
-  success: z.boolean(),
-  stepName: z.string(),
-  evidence: z.object({
-    receipt: z.string().optional(),
-    timestamp: z.string().datetime(),
-    apiResponse: z.any().optional()
-  }),
-  shouldRetry: z.boolean().default(false),
-  nextAttempt: z.number().int().optional()
-})
-
-export const config: EventRouteConfig = {
+export const config = {
   name: 'AnalyticsDeletion',
-  type: 'event',
-  topic: 'analytics-deletion',
+  type: 'event' as const,
   description: 'Delete tracking data from analytics systems with retry logic',
+  subscribes: ['analytics-deletion'],
   emits: [
     {
       topic: 'step-completed',
-      label: 'Step Completed',
-      conditional: false
+      label: 'Step Completed'
     },
     {
       topic: 'step-failed',
@@ -62,8 +53,7 @@ export const config: EventRouteConfig = {
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     },
     {
       topic: 'parallel-step-completed',
@@ -71,12 +61,10 @@ export const config: EventRouteConfig = {
       conditional: true
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: AnalyticsDeletionInputSchema,
-  outputSchema: AnalyticsDeletionResponseSchema
+  input: AnalyticsDeletionInputSchema
 }
 
-export const handler: Handlers['AnalyticsDeletion'] = async (data, { emit, logger, state }) => {
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
   const { workflowId, userIdentifiers, stepName, attempt } = AnalyticsDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -179,13 +167,6 @@ export const handler: Handlers['AnalyticsDeletion'] = async (data, { emit, logge
         }
       })
 
-      return {
-        success: true,
-        stepName,
-        evidence: workflowState.steps[stepName].evidence,
-        shouldRetry: false
-      }
-
     } else {
       // Handle failure with retry logic
       const maxRetries = ghostProtocolConfig.workflow.maxRetryAttempts
@@ -224,14 +205,6 @@ export const handler: Handlers['AnalyticsDeletion'] = async (data, { emit, logge
             }
           })
         }, retryDelay)
-
-        return {
-          success: false,
-          stepName,
-          evidence: workflowState.steps[stepName].evidence,
-          shouldRetry: true,
-          nextAttempt
-        }
 
       } else {
         // Max retries exceeded, mark as failed
@@ -289,21 +262,15 @@ export const handler: Handlers['AnalyticsDeletion'] = async (data, { emit, logge
             timestamp
           }
         })
-
-        return {
-          success: false,
-          stepName,
-          evidence: workflowState.steps[stepName].evidence,
-          shouldRetry: false
-        }
       }
     }
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Analytics deletion step failed with exception', { 
       workflowId, 
       userId: userIdentifiers.userId,
-      error: error.message 
+      error: errorMessage 
     })
 
     // Emit step failure
@@ -313,8 +280,8 @@ export const handler: Handlers['AnalyticsDeletion'] = async (data, { emit, logge
         workflowId,
         stepName,
         status: 'FAILED',
-        error: error.message,
-        timestamp,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
         requiresManualIntervention: false
       }
     })
@@ -378,11 +345,12 @@ async function performAnalyticsDeletion(
     }
 
   } catch (error) {
-    logger.error('Analytics API call failed', { error: error.message })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Analytics API call failed', { error: errorMessage })
     return {
       success: false,
-      error: `Analytics API exception: ${error.message}`,
-      apiResponse: { exception: error.message }
+      error: `Analytics API exception: ${errorMessage}`,
+      apiResponse: { exception: errorMessage }
     }
   }
 }

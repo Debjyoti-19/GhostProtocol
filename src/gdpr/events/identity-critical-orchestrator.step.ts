@@ -1,52 +1,43 @@
-import { EventRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
-import { 
-  WorkflowStateError 
-} from '../errors/index.js'
+
+// Simple error class for this step
+class WorkflowStateError extends Error {
+  constructor(workflowId: string, message: string) {
+    super(`Workflow ${workflowId}: ${message}`)
+    this.name = 'WorkflowStateError'
+  }
+}
 
 // Input schema for Identity Critical Orchestrator event
 const IdentityCriticalOrchestratorInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+  workflowId: z.string().uuid(),
   userIdentifiers: z.object({
     userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email('Invalid email format')),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone format')),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
     aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
   })
 })
 
-// Response schema for Identity Critical Orchestrator
-const IdentityCriticalOrchestratorResponseSchema = z.object({
-  success: z.boolean(),
-  workflowId: z.string(),
-  phase: z.string(),
-  triggeredSteps: z.array(z.string()),
-  timestamp: z.string().datetime()
-})
-
-export const config: EventRouteConfig = {
+export const config = {
   name: 'IdentityCriticalOrchestrator',
-  type: 'event',
-  topic: 'workflow-created',
+  type: 'event' as const,
   description: 'Orchestrate identity-critical deletion steps with sequential ordering enforcement',
+  subscribes: ['workflow-created'],
   emits: [
     {
       topic: 'stripe-deletion',
-      label: 'Trigger Stripe Deletion',
-      conditional: false
+      label: 'Trigger Stripe Deletion'
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: IdentityCriticalOrchestratorInputSchema,
-  outputSchema: IdentityCriticalOrchestratorResponseSchema
+  input: IdentityCriticalOrchestratorInputSchema
 }
 
-export const handler: Handlers['IdentityCriticalOrchestrator'] = async (data, { emit, logger, state }) => {
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
   const { workflowId, userIdentifiers } = IdentityCriticalOrchestratorInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 

@@ -1,30 +1,25 @@
-import { EventRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
-import { 
-  WorkflowStateError 
-} from '../errors/index.js'
+
+// Simple error class for this step
+class WorkflowStateError extends Error {
+  constructor(workflowId: string, message: string) {
+    super(`Workflow ${workflowId}: ${message}`)
+    this.name = 'WorkflowStateError'
+  }
+}
 
 // Input schema for Checkpoint validation event
 const CheckpointValidationInputSchema = z.object({
-  workflowId: z.string().uuid('Invalid workflow ID format'),
+  workflowId: z.string().uuid(),
   checkpointType: z.enum(['identity-critical', 'parallel-completion', 'background-jobs']),
   requiredSteps: z.array(z.string().min(1, 'Step name cannot be empty'))
 })
 
-// Response schema for Checkpoint validation
-const CheckpointValidationResponseSchema = z.object({
-  success: z.boolean(),
-  checkpointType: z.string(),
-  validatedSteps: z.array(z.string()),
-  checkpointStatus: z.enum(['PASSED', 'FAILED', 'PENDING']),
-  timestamp: z.string().datetime()
-})
-
-export const config: EventRouteConfig = {
+export const config = {
   name: 'CheckpointValidation',
-  type: 'event',
-  topic: 'checkpoint-validation',
+  type: 'event' as const,
   description: 'Validate workflow checkpoints and mark completion milestones',
+  subscribes: ['checkpoint-validation'],
   emits: [
     {
       topic: 'checkpoint-passed',
@@ -38,8 +33,7 @@ export const config: EventRouteConfig = {
     },
     {
       topic: 'audit-log',
-      label: 'Audit Log Entry',
-      conditional: false
+      label: 'Audit Log Entry'
     },
     {
       topic: 'parallel-deletion-trigger',
@@ -47,12 +41,10 @@ export const config: EventRouteConfig = {
       conditional: true
     }
   ],
-  flows: ['erasure-workflow'],
-  inputSchema: CheckpointValidationInputSchema,
-  outputSchema: CheckpointValidationResponseSchema
+  input: CheckpointValidationInputSchema
 }
 
-export const handler: Handlers['CheckpointValidation'] = async (data, { emit, logger, state }) => {
+export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
   const { workflowId, checkpointType, requiredSteps } = CheckpointValidationInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -155,14 +147,6 @@ export const handler: Handlers['CheckpointValidation'] = async (data, { emit, lo
         })
       }
 
-      return {
-        success: true,
-        checkpointType,
-        validatedSteps,
-        checkpointStatus: 'PASSED',
-        timestamp
-      }
-
     } else {
       // Checkpoint failed
       if (!workflowState.checkpoints) {
@@ -213,20 +197,14 @@ export const handler: Handlers['CheckpointValidation'] = async (data, { emit, lo
         }
       })
 
-      return {
-        success: false,
-        checkpointType,
-        validatedSteps,
-        checkpointStatus: 'FAILED',
-        timestamp
-      }
     }
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Checkpoint validation failed with exception', { 
       workflowId, 
       checkpointType,
-      error: error.message 
+      error: errorMessage 
     })
 
     // Emit checkpoint failed
@@ -235,8 +213,8 @@ export const handler: Handlers['CheckpointValidation'] = async (data, { emit, lo
       data: {
         workflowId,
         checkpointType,
-        error: error.message,
-        timestamp,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
         requiresManualIntervention: true
       }
     })

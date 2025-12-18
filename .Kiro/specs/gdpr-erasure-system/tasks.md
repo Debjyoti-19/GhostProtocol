@@ -26,7 +26,9 @@
   - Configure Motia with required plugins and adapters
   - _Requirements: 1.1, 6.1_
 
-- [ ] 2. Implement core data models and validation schemas
+- [x] 2. Implement core data models and validation schemas
+
+
 
 
 
@@ -259,37 +261,67 @@
   - **Property 21: Completion Notifications**
   - **Validates: Requirements 7.5**
 
-- [ ] 11. Create zombie data detection system
+- [x] 11. Create zombie data detection system
+
+
+
+
+
   - Implement cron step for scheduled zombie data checks
   - Add re-scanning logic for previously deleted user identifiers
   - Create automatic new workflow spawning when zombie data is detected
   - Implement audit logging for zombie check results
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 11.1 Write property test for zombie check scheduling
+- [x] 11.1 Write property test for zombie check scheduling
+
+
   - **Property 22: Zombie Check Scheduling**
   - **Validates: Requirements 8.1**
 
-- [ ] 11.2 Write property test for zombie detection and response
+- [x] 11.2 Write property test for zombie detection and response
+
+
   - **Property 23: Zombie Detection and Response**
   - **Validates: Requirements 8.2, 8.3**
 
-- [ ] 11.3 Write property test for zombie check audit
+- [x] 11.3 Write property test for zombie check audit
+
+
   - **Property 24: Zombie Check Audit**
   - **Validates: Requirements 8.4, 8.5**
 
-- [ ] 12. Implement legal hold system
+- [x] 12. Implement legal hold system
+
+
+
+
+
+
+
+
+
+
   - Create legal hold marking functionality for specific systems
   - Implement exclusion logic for held systems in deletion workflows
   - Add legal hold documentation in certificates with justification
   - Create legal hold expiration and resumption capabilities
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-- [ ] 12.1 Write property test for legal hold enforcement
+- [x] 12.1 Write property test for legal hold enforcement
+
+
+
+
+
+
+
   - **Property 25: Legal Hold Enforcement**
   - **Validates: Requirements 9.1, 9.2, 9.3**
 
-- [ ] 12.2 Write property test for legal hold audit
+- [x] 12.2 Write property test for legal hold audit
+
+
   - **Property 26: Legal Hold Audit**
   - **Validates: Requirements 9.4, 9.5**
 

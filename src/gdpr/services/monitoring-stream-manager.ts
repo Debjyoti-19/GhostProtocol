@@ -124,7 +124,7 @@ export class MonitoringStreamManager {
       this.logger.error('Failed to publish workflow status update', {
         workflowId,
         updateId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -158,11 +158,13 @@ export class MonitoringStreamManager {
       severity,
       category,
       error,
-      context,
       remediation,
-      impact,
-      resolution: {
-        status: 'OPEN'
+      metadata: {
+        context,
+        impact,
+        resolution: {
+          status: 'OPEN'
+        }
       }
     }
 
@@ -195,7 +197,7 @@ export class MonitoringStreamManager {
         workflowId,
         errorId,
         originalError: error.message,
-        publishError: publishError.message
+        publishError: publishError instanceof Error ? publishError.message : String(publishError)
       })
       throw publishError
     }
@@ -278,36 +280,39 @@ export class MonitoringStreamManager {
           deleted: systemsDeleted,
           failed: systemsFailed,
           legalHolds
-        },
+        }
+      },
+      certificateId: certificate?.certificateId,
+      compliance: {
+        jurisdiction: 'EU', // TODO: Get from workflow context
+        policyVersion: workflowState.policyVersion,
+        zombieCheckScheduled: true
+      },
+      metadata: {
         backgroundJobs: {
           total: backgroundJobEntries.length,
           completed: jobsCompleted,
           failed: jobsFailed,
           piiFindings: totalPiiFindings
-        }
-      },
-      certificate: certificate ? {
-        certificateId: certificate.certificateId,
-        auditHashRoot: certificate.auditHashRoot,
-        signature: certificate.signature
-      } : undefined,
-      exceptions: systemsFailed > 0 ? stepEntries
-        .filter(([_, step]) => step.status === 'FAILED')
-        .map(([stepName, step]) => ({
-          system: stepName,
-          error: step.evidence.receipt || 'Unknown error',
-          remediation: 'Manual intervention required'
-        })) : undefined,
-      legalHolds: workflowState.legalHolds.map(hold => ({
-        system: hold.system,
-        reason: hold.reason,
-        expiresAt: hold.expiresAt
-      })),
-      nextActions,
-      compliance: {
-        jurisdiction: 'EU', // TODO: Get from workflow context
-        policyVersion: workflowState.policyVersion,
-        zombieCheckScheduled: true,
+        },
+        certificate: certificate ? {
+          certificateId: certificate.certificateId,
+          auditHashRoot: certificate.auditHashRoot,
+          signature: certificate.signature
+        } : undefined,
+        exceptions: systemsFailed > 0 ? stepEntries
+          .filter(([_, step]) => step.status === 'FAILED')
+          .map(([stepName, step]) => ({
+            system: stepName,
+            error: step.evidence.receipt || 'Unknown error',
+            remediation: 'Manual intervention required'
+          })) : undefined,
+        legalHolds: workflowState.legalHolds.map(hold => ({
+          system: hold.system,
+          reason: hold.reason,
+          expiresAt: hold.expiresAt
+        })),
+        nextActions,
         zombieCheckDate
       }
     }
@@ -344,7 +349,7 @@ export class MonitoringStreamManager {
       this.logger.error('Failed to publish completion notification', {
         workflowId: workflowState.workflowId,
         notificationId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -368,11 +373,14 @@ export class MonitoringStreamManager {
 
       const updatedError: ErrorNotification = {
         ...existingError,
-        resolution: {
-          status,
-          resolvedAt: new Date().toISOString(),
-          resolvedBy,
-          resolution
+        metadata: {
+          ...existingError.metadata,
+          resolution: {
+            status,
+            resolvedAt: new Date().toISOString(),
+            resolvedBy,
+            resolution
+          }
         }
       }
 
@@ -394,7 +402,7 @@ export class MonitoringStreamManager {
       this.logger.error('Failed to update error resolution', {
         workflowId,
         errorId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -409,7 +417,7 @@ export class MonitoringStreamManager {
     } catch (error) {
       this.logger.error('Failed to get workflow status history', {
         workflowId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -424,7 +432,7 @@ export class MonitoringStreamManager {
     } catch (error) {
       this.logger.error('Failed to get workflow errors', {
         workflowId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -439,7 +447,7 @@ export class MonitoringStreamManager {
     } catch (error) {
       this.logger.error('Failed to get workflow completions', {
         workflowId,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }

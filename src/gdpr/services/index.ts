@@ -43,3 +43,14 @@ export type {
   RemediationInfo,
   ErrorImpact
 } from './monitoring-stream-manager.js'
+
+export { ZombieCheckScheduler } from './zombie-check-scheduler.js'
+export type {
+  ZombieCheckSchedule
+} from './zombie-check-scheduler.js'
+
+export { LegalHoldManager } from './legal-hold-manager.js'
+export type {
+  LegalHoldOptions,
+  LegalHoldStatus
+} from './legal-hold-manager.js'

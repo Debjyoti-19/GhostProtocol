@@ -57,16 +57,7 @@ export const config = {
   description: 'Handles scanning of S3 cold storage for PII data with checkpoint-based resumability',
   flows: ['erasure-workflow'],
   subscribes: ['s3-cold-storage-scan'],
-  emits: [
-    {
-      topic: 'pii-deletion-required',
-      label: 'PII Deletion Required'
-    },
-    {
-      topic: 'background-job-progress',
-      label: 'Background Job Progress'
-    }
-  ],
+  emits: ['pii-deletion-required', 'background-job-progress', 'audit-log'],
   input: S3ScanInputSchema
 }
 

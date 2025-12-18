@@ -38,16 +38,7 @@ export const config = {
   description: 'Handles scanning of data warehouses for PII data with checkpoint-based resumability',
   flows: ['erasure-workflow'],
   subscribes: ['warehouse-scan'],
-  emits: [
-    {
-      topic: 'pii-deletion-required',
-      label: 'PII Deletion Required'
-    },
-    {
-      topic: 'background-job-progress', 
-      label: 'Background Job Progress'
-    }
-  ],
+  emits: ['pii-deletion-required', 'background-job-progress', 'audit-log'],
   input: WarehouseScanInputSchema
 }
 

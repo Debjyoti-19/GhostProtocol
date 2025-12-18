@@ -21,27 +21,7 @@ export const config = {
   description: 'Validate workflow checkpoints and mark completion milestones',
   flows: ['erasure-workflow'],
   subscribes: ['checkpoint-validation'],
-  emits: [
-    {
-      topic: 'checkpoint-passed',
-      label: 'Checkpoint Passed',
-      conditional: true
-    },
-    {
-      topic: 'checkpoint-failed',
-      label: 'Checkpoint Failed',
-      conditional: true
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'parallel-deletion-trigger',
-      label: 'Trigger Parallel Deletions',
-      conditional: true
-    }
-  ],
+  emits: ['checkpoint-passed', 'checkpoint-failed', 'audit-log', 'workflow-completed'],
   input: CheckpointValidationInputSchema
 }
 
@@ -131,21 +111,19 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         }
       })
 
-      // Trigger next phase based on checkpoint type
-      if (checkpointType === 'identity-critical') {
-        // Identity critical steps completed, trigger parallel deletions
+      // Trigger workflow completion if this is the final checkpoint
+      if (checkpointType === 'parallel-completion') {
         await emit({
-          topic: 'parallel-deletion-trigger',
+          topic: 'workflow-completed',
           data: {
             workflowId,
             userIdentifiers: workflowState.userIdentifiers,
-            parallelSteps: ['intercom-deletion', 'sendgrid-deletion', 'crm-deletion', 'analytics-deletion']
+            completedAt: timestamp,
+            status: 'COMPLETED'
           }
         })
 
-        logger.info('Identity critical checkpoint passed, triggering parallel deletions', { 
-          workflowId 
-        })
+        logger.info('All deletions completed, triggering workflow completion', { workflowId })
       }
 
       return {

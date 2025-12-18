@@ -55,24 +55,7 @@ export const config = {
   description: 'Delete email lists and templates from SendGrid with retry logic',
   flows: ['erasure-workflow'],
   subscribes: ['sendgrid-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed'
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'parallel-step-completed',
-      label: 'Parallel Step Completed'
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'checkpoint-validation'],
   input: SendGridDeletionInputSchema
 }
 

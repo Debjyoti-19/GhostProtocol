@@ -36,26 +36,7 @@ export const config = {
   description: 'Delete user records from database with transaction hash recording',
   flows: ['erasure-workflow'],
   subscribes: ['database-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed',
-      conditional: true
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'checkpoint-validation',
-      label: 'Trigger Checkpoint Validation',
-      conditional: true
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'slack-deletion'],
   input: DatabaseDeletionInputSchema
 }
 
@@ -152,13 +133,19 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         }
       })
 
-      // Trigger checkpoint validation (both identity-critical steps completed)
+      // Mark identity-critical as completed and trigger Slack AI scanning
+      workflowState.identityCriticalCompleted = true
+      workflowState.identityCriticalCompletedAt = timestamp
+      await state.set(`workflow:${workflowId}`, workflowState)
+
+      // Trigger Slack deletion (AI PII scanning)
       await emit({
-        topic: 'checkpoint-validation',
+        topic: 'slack-deletion',
         data: {
           workflowId,
-          checkpointType: 'identity-critical',
-          requiredSteps: ['stripe-deletion', 'database-deletion']
+          userIdentifiers,
+          stepName: 'slack-deletion',
+          attempt: 1
         }
       })
 

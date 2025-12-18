@@ -1,0 +1,144 @@
+/**
+ * Background Scans Child Workflow
+ * 
+ * Handles all background scanning jobs (S3, Warehouse) as a child workflow.
+ * This isolates long-running scan operations from the main workflow.
+ * 
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+ */
+
+import { WorkflowConfig } from 'motia'
+import { z } from 'zod'
+
+const BackgroundScansInputSchema = z.object({
+  workflowId: z.string().uuid(),
+  userIdentifiers: z.object({
+    userId: z.string().min(1),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string()),
+    aliases: z.array(z.string())
+  }),
+  scanTargets: z.object({
+    s3: z.object({
+      bucketName: z.string(),
+      prefix: z.string().optional()
+    }).optional(),
+    warehouse: z.object({
+      connectionString: z.string(),
+      tables: z.array(z.string())
+    }).optional()
+  })
+})
+
+export const config: WorkflowConfig = {
+  name: 'BackgroundScansWorkflow',
+  type: 'workflow',
+  description: 'Child workflow for background scanning operations',
+  flows: ['erasure-workflow'],
+  input: BackgroundScansInputSchema,
+  emits: ['background-scans-completed', 'audit-log']
+}
+
+export async function handler(input: z.infer<typeof BackgroundScansInputSchema>, { emit, logger }: any) {
+  const { workflowId, userIdentifiers, scanTargets } = input
+  const timestamp = new Date().toISOString()
+
+  logger.info('Starting background scans child workflow', {
+    parentWorkflowId: workflowId,
+    hasS3: !!scanTargets.s3,
+    hasWarehouse: !!scanTargets.warehouse
+  })
+
+  try {
+    const scanPromises: Promise<any>[] = []
+
+    // Trigger S3 scan if configured
+    if (scanTargets.s3) {
+      scanPromises.push(
+        emit({
+          topic: 's3-cold-storage-scan',
+          data: {
+            workflowId,
+            bucketName: scanTargets.s3.bucketName,
+            prefix: scanTargets.s3.prefix,
+            userIdentifiers
+          }
+        }).then(() => ({ scan: 's3', status: 'TRIGGERED' }))
+      )
+    }
+
+    // Trigger warehouse scan if configured
+    if (scanTargets.warehouse) {
+      scanPromises.push(
+        emit({
+          topic: 'warehouse-scan',
+          data: {
+            workflowId,
+            connectionString: scanTargets.warehouse.connectionString,
+            tables: scanTargets.warehouse.tables,
+            userIdentifiers
+          }
+        }).then(() => ({ scan: 'warehouse', status: 'TRIGGERED' }))
+      )
+    }
+
+    const results = await Promise.allSettled(scanPromises)
+    
+    const successCount = results.filter(r => r.status === 'fulfilled').length
+    const failureCount = results.filter(r => r.status === 'rejected').length
+
+    logger.info('Background scans child workflow completed', {
+      parentWorkflowId: workflowId,
+      successCount,
+      failureCount
+    })
+
+    // Emit completion event
+    await emit({
+      topic: 'background-scans-completed',
+      data: {
+        workflowId,
+        successCount,
+        failureCount,
+        completedAt: new Date().toISOString()
+      }
+    })
+
+    // Emit audit log
+    await emit({
+      topic: 'audit-log',
+      data: {
+        event: 'BACKGROUND_SCANS_CHILD_WORKFLOW_COMPLETED',
+        workflowId,
+        successCount,
+        failureCount,
+        timestamp: new Date().toISOString()
+      }
+    })
+
+    return {
+      success: failureCount === 0,
+      successCount,
+      failureCount
+    }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Background scans child workflow failed', {
+      parentWorkflowId: workflowId,
+      error: errorMessage
+    })
+
+    await emit({
+      topic: 'audit-log',
+      data: {
+        event: 'BACKGROUND_SCANS_CHILD_WORKFLOW_FAILED',
+        workflowId,
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      }
+    })
+
+    throw error
+  }
+}

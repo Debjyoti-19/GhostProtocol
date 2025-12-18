@@ -38,7 +38,7 @@ export const config: ApiRouteConfig = {
     requireRole(['Legal', 'Compliance Admin', 'Auditor', 'System Admin'])
   ],
   emits: [],
-  flows: ['erasure-workflow'],
+  flows: ['erasure-admin'],
   responseSchema: {
     200: z.object({
       workflows: z.array(workflowSummarySchema),

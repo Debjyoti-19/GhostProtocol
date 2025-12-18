@@ -42,26 +42,7 @@ export const config = {
   description: 'Delete conversation and user data from Intercom with retry logic',
   flows: ['erasure-workflow'],
   subscribes: ['intercom-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed',
-      conditional: true
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'parallel-step-completed',
-      label: 'Parallel Step Completed',
-      conditional: true
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'checkpoint-validation'],
   input: IntercomDeletionInputSchema
 }
 

@@ -1,0 +1,138 @@
+/**
+ * Parallel Deletions Child Workflow
+ * 
+ * Handles all non-critical parallel deletion steps as a child workflow.
+ * This isolates failures - if one parallel deletion fails, it doesn't kill the parent workflow.
+ * 
+ * Requirements: 3.1, 3.2, 3.3, 3.4
+ */
+
+import { WorkflowConfig } from 'motia'
+import { z } from 'zod'
+
+const ParallelDeletionsInputSchema = z.object({
+  workflowId: z.string().uuid(),
+  userIdentifiers: z.object({
+    userId: z.string().min(1),
+    emails: z.array(z.string().email()),
+    phones: z.array(z.string()),
+    aliases: z.array(z.string())
+  }),
+  systems: z.array(z.enum(['intercom', 'sendgrid', 'crm', 'analytics'])).default([
+    'intercom',
+    'sendgrid', 
+    'crm',
+    'analytics'
+  ])
+})
+
+export const config: WorkflowConfig = {
+  name: 'ParallelDeletionsWorkflow',
+  type: 'workflow',
+  description: 'Child workflow for parallel non-critical system deletions',
+  flows: ['erasure-workflow'],
+  input: ParallelDeletionsInputSchema,
+  emits: ['parallel-deletions-completed', 'audit-log']
+}
+
+export async function handler(input: z.infer<typeof ParallelDeletionsInputSchema>, { emit, logger, executeChild }: any) {
+  const { workflowId, userIdentifiers, systems } = input
+  const timestamp = new Date().toISOString()
+
+  logger.info('Starting parallel deletions child workflow', {
+    parentWorkflowId: workflowId,
+    systems
+  })
+
+  try {
+    // Execute all parallel deletions concurrently
+    const deletionPromises = systems.map(async (system) => {
+      try {
+        logger.info(`Triggering ${system} deletion`, { workflowId })
+        
+        await emit({
+          topic: `${system}-deletion`,
+          data: {
+            workflowId,
+            userIdentifiers,
+            stepName: `${system}-deletion`,
+            attempt: 1
+          }
+        })
+
+        return { system, status: 'TRIGGERED', error: null }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        logger.error(`Failed to trigger ${system} deletion`, {
+          workflowId,
+          system,
+          error: errorMessage
+        })
+        return { system, status: 'FAILED', error: errorMessage }
+      }
+    })
+
+    const results = await Promise.allSettled(deletionPromises)
+    
+    const successCount = results.filter(r => r.status === 'fulfilled').length
+    const failureCount = results.filter(r => r.status === 'rejected').length
+
+    logger.info('Parallel deletions child workflow completed', {
+      parentWorkflowId: workflowId,
+      successCount,
+      failureCount,
+      totalSystems: systems.length
+    })
+
+    // Emit completion event
+    await emit({
+      topic: 'parallel-deletions-completed',
+      data: {
+        workflowId,
+        systems,
+        successCount,
+        failureCount,
+        completedAt: new Date().toISOString()
+      }
+    })
+
+    // Emit audit log
+    await emit({
+      topic: 'audit-log',
+      data: {
+        event: 'PARALLEL_DELETIONS_CHILD_WORKFLOW_COMPLETED',
+        workflowId,
+        systems,
+        successCount,
+        failureCount,
+        timestamp: new Date().toISOString()
+      }
+    })
+
+    return {
+      success: failureCount === 0,
+      successCount,
+      failureCount,
+      systems
+    }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Parallel deletions child workflow failed', {
+      parentWorkflowId: workflowId,
+      error: errorMessage
+    })
+
+    await emit({
+      topic: 'audit-log',
+      data: {
+        event: 'PARALLEL_DELETIONS_CHILD_WORKFLOW_FAILED',
+        workflowId,
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      }
+    })
+
+    throw error
+  }
+}

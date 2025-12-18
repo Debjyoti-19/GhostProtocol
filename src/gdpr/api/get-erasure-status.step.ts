@@ -59,7 +59,7 @@ export const config: ApiRouteConfig = {
       conditional: false
     }
   ],
-  flows: ['erasure-workflow'],
+  flows: ['erasure-admin'],
   responseSchema: {
     200: statusResponseSchema,
     404: z.object({ error: z.string() }),

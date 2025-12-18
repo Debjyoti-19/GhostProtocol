@@ -36,24 +36,7 @@ export const config = {
   description: 'Delete customer data from Stripe with retry logic and API response recording',
   flows: ['erasure-workflow'],
   subscribes: ['stripe-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed'
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'database-deletion',
-      label: 'Trigger Database Deletion'
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'database-deletion'],
   input: StripeDeletionInputSchema
 }
 

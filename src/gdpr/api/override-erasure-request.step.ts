@@ -78,7 +78,7 @@ export const config: ApiRouteConfig = {
       conditional: false
     }
   ],
-  flows: ['erasure-workflow'],
+  flows: ['erasure-admin'],
   bodySchema: overrideRequestSchema,
   responseSchema: {
     200: overrideResponseSchema,

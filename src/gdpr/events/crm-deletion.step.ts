@@ -42,26 +42,7 @@ export const config = {
   description: 'Delete customer records from CRM system with retry logic',
   flows: ['erasure-workflow'],
   subscribes: ['crm-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed',
-      conditional: true
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'parallel-step-completed',
-      label: 'Parallel Step Completed',
-      conditional: true
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'checkpoint-validation'],
   input: CRMDeletionInputSchema
 }
 

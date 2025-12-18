@@ -42,6 +42,7 @@ export const config: CronConfig = {
     'audit-log',
     'create-erasure-request'
   ],
+  virtualSubscribes: ['zombie-check-scheduled'], // Shows connection from WorkflowCompletion
 }
 
 export const handler: Handlers['ZombieDataCheck'] = async ({ logger, state, emit }) => {

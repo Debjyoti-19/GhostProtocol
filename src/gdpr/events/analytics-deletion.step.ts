@@ -42,26 +42,7 @@ export const config = {
   description: 'Delete tracking data from analytics systems with retry logic',
   flows: ['erasure-workflow'],
   subscribes: ['analytics-deletion'],
-  emits: [
-    {
-      topic: 'step-completed',
-      label: 'Step Completed'
-    },
-    {
-      topic: 'step-failed',
-      label: 'Step Failed',
-      conditional: true
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    },
-    {
-      topic: 'parallel-step-completed',
-      label: 'Parallel Step Completed',
-      conditional: true
-    }
-  ],
+  emits: ['step-completed', 'step-failed', 'audit-log', 'checkpoint-validation'],
   input: AnalyticsDeletionInputSchema
 }
 

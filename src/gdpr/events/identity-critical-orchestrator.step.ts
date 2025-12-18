@@ -25,16 +25,7 @@ export const config = {
   description: 'Orchestrate identity-critical deletion steps with sequential ordering enforcement',
   flows: ['erasure-workflow'],
   subscribes: ['workflow-created'],
-  emits: [
-    {
-      topic: 'stripe-deletion',
-      label: 'Trigger Stripe Deletion'
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    }
-  ],
+  emits: ['stripe-deletion', 'audit-log'],
   input: IdentityCriticalOrchestratorInputSchema
 }
 

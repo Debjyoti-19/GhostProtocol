@@ -34,16 +34,8 @@ export const config = {
   description: 'Handles workflow completion and schedules zombie data checks',
   flows: ['erasure-workflow'],
   subscribes: ['workflow-completed'],
-  emits: [
-    {
-      topic: 'zombie-check-scheduled',
-      label: 'Zombie Check Scheduled'
-    },
-    {
-      topic: 'audit-log',
-      label: 'Audit Log Entry'
-    }
-  ],
+  emits: ['zombie-check-scheduled', 'audit-log'],
+  virtualSubscribes: ['checkpoint-passed'], // Shows connection from final checkpoint
   input: WorkflowCompletionInputSchema
 }
 

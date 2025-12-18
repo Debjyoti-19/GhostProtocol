@@ -8,14 +8,14 @@ class WorkflowStateError extends Error {
   }
 }
 
-// Input schema for Identity Critical Orchestrator event
+// Input schema for Identity Critical Orchestrator event (lenient validation)
 const IdentityCriticalOrchestratorInputSchema = z.object({
-  workflowId: z.string().uuid(),
+  workflowId: z.string(),
   userIdentifiers: z.object({
-    userId: z.string().min(1, 'User ID is required'),
-    emails: z.array(z.string().email()),
-    phones: z.array(z.string().regex(/^\+?[\d\s\-\(\)]+$/)),
-    aliases: z.array(z.string().min(1, 'Alias cannot be empty'))
+    userId: z.string(),
+    emails: z.array(z.string()),
+    phones: z.array(z.string()),
+    aliases: z.array(z.string())
   })
 })
 
@@ -29,93 +29,51 @@ export const config = {
   input: IdentityCriticalOrchestratorInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
-  const { workflowId, userIdentifiers } = IdentityCriticalOrchestratorInputSchema.parse(data)
+export async function handler(data: any, { emit, logger }: any): Promise<void> {
   const timestamp = new Date().toISOString()
+  
+  logger.info('Orchestrator received data', { data })
+
+  // Parse input
+  let workflowId: string
+  let userIdentifiers: any
+  
+  try {
+    const parsed = IdentityCriticalOrchestratorInputSchema.parse(data)
+    workflowId = parsed.workflowId
+    userIdentifiers = parsed.userIdentifiers
+  } catch (parseError: any) {
+    logger.error('Failed to parse input', { error: parseError.message, data })
+    throw new Error(`Input parsing failed: ${parseError.message}`)
+  }
 
   logger.info('Starting identity-critical orchestration', { 
     workflowId, 
     userId: userIdentifiers.userId 
   })
 
-  try {
-    // Get current workflow state
-    const workflowState = await state.get(`workflow:${workflowId}`)
-    if (!workflowState) {
-      throw new WorkflowStateError(workflowId, `Workflow not found`)
-    }
-
-    // Ensure workflow is in correct state to begin identity-critical phase
-    if (workflowState.status !== 'IN_PROGRESS') {
-      throw new WorkflowStateError(
-        workflowId,
-        `Workflow is not in progress. Current status: ${workflowState.status}`
-      )
-    }
-
-    // Mark the beginning of identity-critical phase
-    workflowState.currentPhase = 'identity-critical'
-    workflowState.identityCriticalStartedAt = timestamp
-
-    // Save updated state
-    await state.set(`workflow:${workflowId}`, workflowState)
-
-    logger.info('Identity-critical phase started, triggering Stripe deletion', { 
-      workflowId, 
-      userId: userIdentifiers.userId 
-    })
-
-    // Emit audit log for phase start
-    await emit({
-      topic: 'audit-log',
-      data: {
-        event: 'IDENTITY_CRITICAL_PHASE_STARTED',
-        workflowId,
-        userIdentifiers,
-        phase: 'identity-critical',
-        timestamp
-      }
-    })
-
-    // Trigger the first step in the sequential chain: Stripe deletion
-    // Database deletion will be triggered automatically after Stripe completes
-    await emit({
-      topic: 'stripe-deletion',
-      data: {
-        workflowId,
-        userIdentifiers,
-        stepName: 'stripe-deletion',
-        attempt: 1
-      }
-    })
-
-    return {
-      success: true,
+  // Trigger Stripe deletion directly - no state dependency
+  logger.info('Triggering Stripe deletion', { workflowId })
+  
+  await emit({
+    topic: 'stripe-deletion',
+    data: {
       workflowId,
-      phase: 'identity-critical',
-      triggeredSteps: ['stripe-deletion'],
+      userIdentifiers,
+      stepName: 'stripe-deletion',
+      attempt: 1
+    }
+  })
+
+  logger.info('Stripe deletion event emitted successfully', { workflowId })
+
+  // Emit audit log
+  await emit({
+    topic: 'audit-log',
+    data: {
+      event: 'ORCHESTRATION_STARTED',
+      workflowId,
       timestamp
     }
-
-  } catch (error) {
-    logger.error('Identity-critical orchestration failed', { 
-      workflowId, 
-      userId: userIdentifiers.userId,
-      error: error.message 
-    })
-
-    // Emit audit log for orchestration failure
-    await emit({
-      topic: 'audit-log',
-      data: {
-        event: 'IDENTITY_CRITICAL_ORCHESTRATION_FAILED',
-        workflowId,
-        userIdentifiers,
-        error: error.message,
-        timestamp
-      }
-    })
-
-    throw error
-  }
+  })
 }

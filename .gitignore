@@ -6,3 +6,8 @@ venv
 .mermaid
 dist
 *.pyc
+
+# Environment variables (contains secrets)
+.env
+.env.local
+.env.*.local

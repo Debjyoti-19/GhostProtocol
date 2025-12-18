@@ -21,19 +21,6 @@
     }
   },
   {
-    "id": "demo",
-    "config": {
-      "src\\gdpr\\ui\\demo-tokens.step.ts": {
-        "x": 0,
-        "y": 0
-      },
-      "src\\.motia\\compiled\\gdpr\\ui\\demo-tokens.step.js": {
-        "x": 0,
-        "y": 224
-      }
-    }
-  },
-  {
     "id": "erasure-admin",
     "config": {
       "src\\gdpr\\api\\override-erasure-request.step.ts": {
@@ -119,6 +106,15 @@
     }
   },
   {
+    "id": "demo",
+    "config": {
+      "src\\gdpr\\ui\\demo-tokens.step.ts": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  {
     "id": "erasure-workflow",
     "config": {
       "src\\gdpr\\events\\workflow-completion.step.ts": {
@@ -126,8 +122,8 @@
         "y": 739
       },
       "src\\gdpr\\events\\warehouse-scan.step.ts": {
-        "x": 4207,
-        "y": -12
+        "x": 4100,
+        "y": 29
       },
       "src\\gdpr\\events\\stripe-deletion.step.ts": {
         "x": 282,
@@ -154,8 +150,8 @@
         "y": 485
       },
       "src\\gdpr\\events\\identity-critical-orchestrator.step.ts": {
-        "x": 180,
-        "y": 1115
+        "x": 1267,
+        "y": 1332
       },
       "src\\gdpr\\events\\email-deletion.step.ts": {
         "x": 1728,
@@ -186,8 +182,8 @@
         "y": 705
       },
       "src\\gdpr\\api\\create-erasure-request.step.ts": {
-        "x": -494,
-        "y": 810
+        "x": 120,
+        "y": 1090
       }
     }
   }

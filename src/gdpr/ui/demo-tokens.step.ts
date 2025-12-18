@@ -9,7 +9,7 @@
 
 import { ApiRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
-import * as jwt from 'jsonwebtoken'
+import jwt from 'jsonwebtoken'
 
 // User roles for RBAC
 type UserRole = 'Legal' | 'Compliance Admin' | 'Auditor' | 'System Admin'

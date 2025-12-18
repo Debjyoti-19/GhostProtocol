@@ -53,6 +53,7 @@ export const config = {
   name: 'SendGridDeletion',
   type: 'event' as const,
   description: 'Delete email lists and templates from SendGrid with retry logic',
+  flows: ['erasure-workflow'],
   subscribes: ['sendgrid-deletion'],
   emits: [
     {

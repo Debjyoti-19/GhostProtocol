@@ -55,6 +55,7 @@ export const config = {
   name: 'S3ColdStorageScan',
   type: 'event' as const,
   description: 'Handles scanning of S3 cold storage for PII data with checkpoint-based resumability',
+  flows: ['erasure-workflow'],
   subscribes: ['s3-cold-storage-scan'],
   emits: [
     {

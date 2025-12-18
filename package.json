@@ -9,7 +9,13 @@
     "generate-types": "motia generate-types",
     "build": "motia build",
     "clean": "rm -rf dist node_modules python_modules .motia .mermaid",
-    "test": "vitest"
+    "test": "vitest",
+    "demo:visual": "tsx src/gdpr/demo/visual-demo.ts",
+    "demo:judge": "tsx src/gdpr/demo/demo-runner.ts judge",
+    "demo:list": "tsx src/gdpr/demo/demo-runner.ts list",
+    "demo:report": "tsx src/gdpr/demo/demo-runner.ts report",
+    "test:e2e": "tsx src/gdpr/demo/end-to-end-test.ts",
+    "verify": "tsx src/gdpr/demo/verify-integration.ts"
   },
   "keywords": [
     "motia"

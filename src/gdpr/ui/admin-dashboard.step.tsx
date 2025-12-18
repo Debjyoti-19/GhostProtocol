@@ -142,11 +142,28 @@ export default function AdminDashboard() {
       return
     }
     
+    // Prompt for reason and legal basis
+    const reason = prompt('Enter reason for override:')
+    if (!reason) return
+    
+    const legalBasis = prompt('Enter legal basis for override:')
+    if (!legalBasis) return
+    
     try {
       await fetch(`/api/erasure-request/${workflowId}/override`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ 
+          action,
+          reason,
+          legalBasis,
+          approvedBy: {
+            userId: 'demo-user',
+            role: userRole,
+            organization: 'GhostProtocol Demo',
+            timestamp: new Date().toISOString()
+          }
+        })
       })
       alert('Override applied successfully')
       fetchWorkflows()

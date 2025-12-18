@@ -40,6 +40,7 @@ export const config = {
   name: 'AnalyticsDeletion',
   type: 'event' as const,
   description: 'Delete tracking data from analytics systems with retry logic',
+  flows: ['erasure-workflow'],
   subscribes: ['analytics-deletion'],
   emits: [
     {

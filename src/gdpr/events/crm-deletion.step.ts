@@ -40,6 +40,7 @@ export const config = {
   name: 'CRMDeletion',
   type: 'event' as const,
   description: 'Delete customer records from CRM system with retry logic',
+  flows: ['erasure-workflow'],
   subscribes: ['crm-deletion'],
   emits: [
     {

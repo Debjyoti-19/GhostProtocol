@@ -40,6 +40,7 @@ export const config = {
   name: 'IntercomDeletion',
   type: 'event' as const,
   description: 'Delete conversation and user data from Intercom with retry logic',
+  flows: ['erasure-workflow'],
   subscribes: ['intercom-deletion'],
   emits: [
     {

@@ -34,6 +34,7 @@ export const config = {
   name: 'DatabaseDeletion',
   type: 'event' as const,
   description: 'Delete user records from database with transaction hash recording',
+  flows: ['erasure-workflow'],
   subscribes: ['database-deletion'],
   emits: [
     {

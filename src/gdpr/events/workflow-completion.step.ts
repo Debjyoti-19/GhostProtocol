@@ -32,6 +32,7 @@ export const config = {
   name: 'WorkflowCompletion',
   type: 'event' as const,
   description: 'Handles workflow completion and schedules zombie data checks',
+  flows: ['erasure-workflow'],
   subscribes: ['workflow-completed'],
   emits: [
     {

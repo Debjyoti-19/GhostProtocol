@@ -24,13 +24,13 @@ const overrideRequestSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
   legalBasis: z.string().min(1, 'Legal basis is required'),
   systems: z.array(z.string()).optional(), // For LEGAL_HOLD action
-  expiresAt: z.string().datetime().optional(), // For LEGAL_HOLD action
+  expiresAt: z.string().optional(), // For LEGAL_HOLD action - accepts any date string
   evidence: z.string().optional(), // Supporting documentation
   approvedBy: z.object({
     userId: z.string().min(1),
     role: z.string().min(1),
     organization: z.string().min(1),
-    timestamp: z.string().datetime()
+    timestamp: z.string() // Accepts any date string
   })
 })
 
@@ -95,6 +95,23 @@ export const handler: Handlers['OverrideErasureRequest'] = async (req, { emit, l
   try {
     const workflowId = req.pathParams.id
     const overrideData = overrideRequestSchema.parse(req.body)
+    
+    // Normalize date strings to ISO format
+    if (overrideData.expiresAt) {
+      try {
+        overrideData.expiresAt = new Date(overrideData.expiresAt).toISOString()
+      } catch (e) {
+        logger.warn('Invalid expiresAt date format, using as-is', { expiresAt: overrideData.expiresAt })
+      }
+    }
+    
+    try {
+      overrideData.approvedBy.timestamp = new Date(overrideData.approvedBy.timestamp).toISOString()
+    } catch (e) {
+      logger.warn('Invalid timestamp format, using current time', { timestamp: overrideData.approvedBy.timestamp })
+      overrideData.approvedBy.timestamp = new Date().toISOString()
+    }
+    
     const appliedAt = new Date().toISOString()
 
     logger.info('Processing workflow override', { 

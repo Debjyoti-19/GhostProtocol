@@ -35,6 +35,7 @@ export const config: CronConfig = {
   cron: '0 */6 * * *', // Run every 6 hours to check for due zombie checks
   name: 'ZombieDataCheck',
   description: 'Checks for zombie data (reappeared personal data) after erasure workflows complete',
+  flows: ['erasure-workflow'],
   emits: [
     'zombie-data-detected',
     'zombie-check-completed',

@@ -34,6 +34,7 @@ export const config = {
   name: 'StripeDeletion',
   type: 'event' as const,
   description: 'Delete customer data from Stripe with retry logic and API response recording',
+  flows: ['erasure-workflow'],
   subscribes: ['stripe-deletion'],
   emits: [
     {

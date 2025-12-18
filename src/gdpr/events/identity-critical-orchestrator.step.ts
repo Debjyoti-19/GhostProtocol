@@ -23,6 +23,7 @@ export const config = {
   name: 'IdentityCriticalOrchestrator',
   type: 'event' as const,
   description: 'Orchestrate identity-critical deletion steps with sequential ordering enforcement',
+  flows: ['erasure-workflow'],
   subscribes: ['workflow-created'],
   emits: [
     {

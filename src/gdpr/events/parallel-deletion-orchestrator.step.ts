@@ -24,6 +24,7 @@ export const config = {
   name: 'ParallelDeletionOrchestrator',
   type: 'event' as const,
   description: 'Orchestrate parallel deletion steps for non-critical systems after identity-critical checkpoint',
+  flows: ['erasure-workflow'],
   subscribes: ['parallel-deletion-trigger'],
   emits: [
     {

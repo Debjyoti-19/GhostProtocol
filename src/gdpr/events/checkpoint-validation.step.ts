@@ -19,6 +19,7 @@ export const config = {
   name: 'CheckpointValidation',
   type: 'event' as const,
   description: 'Validate workflow checkpoints and mark completion milestones',
+  flows: ['erasure-workflow'],
   subscribes: ['checkpoint-validation'],
   emits: [
     {

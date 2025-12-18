@@ -36,6 +36,7 @@ export const config = {
   type: 'event' as const,
   name: 'WarehouseScan',
   description: 'Handles scanning of data warehouses for PII data with checkpoint-based resumability',
+  flows: ['erasure-workflow'],
   subscribes: ['warehouse-scan'],
   emits: [
     {

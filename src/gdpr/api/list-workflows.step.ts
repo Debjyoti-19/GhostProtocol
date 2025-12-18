@@ -73,14 +73,14 @@ export const handler: Handlers['ListWorkflows'] = async (req, { logger, state })
 
     logger.info('Listing workflows', { statusFilter, page, pageSize })
 
-    // Get all workflow IDs from state
-    // In a real implementation, this would use a proper database query
-    const workflowKeys = await state.keys('workflow:*')
+    // Get workflow list from state
+    // We maintain a list of workflow IDs for efficient querying
+    const workflowList = await state.get('workflow_list') || []
     
     const workflows = []
     
-    for (const key of workflowKeys) {
-      const workflowState = await state.get(key)
+    for (const workflowId of workflowList) {
+      const workflowState = await state.get(`workflow:${workflowId}`)
       
       if (!workflowState) continue
       

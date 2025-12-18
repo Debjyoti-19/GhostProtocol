@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import fc from 'fast-check'
-import { PIIAgent } from './pii-agent.js'
-import { PIIType } from '../types/index.js'
+import { PIIAgent } from '../../../src/gdpr/services/pii-agent.js'
+import { PIIType } from '../../../src/gdpr/types/index.js'
 
 describe('PII Agent Structured Output Format Properties', () => {
   let agent: PIIAgent

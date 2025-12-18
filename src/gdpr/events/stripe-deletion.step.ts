@@ -56,7 +56,7 @@ export const config = {
   input: StripeDeletionInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+export async function handler(data: any, { emit, logger, state }: any): Promise<any> {
   const { workflowId, userIdentifiers, stepName, attempt } = StripeDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -151,7 +151,12 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         }
       })
 
-      // Event step completed successfully
+      return {
+        success: true,
+        stepName,
+        evidence: workflowState.steps[stepName].evidence,
+        shouldRetry: false
+      }
 
     } else {
       // Handle failure with retry logic
@@ -192,7 +197,13 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
           })
         }, retryDelay)
 
-        // Retry scheduled
+        return {
+          success: false,
+          stepName,
+          evidence: workflowState.steps[stepName].evidence,
+          shouldRetry: true,
+          nextAttempt
+        }
 
       } else {
         // Max retries exceeded, mark as failed
@@ -239,7 +250,12 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
           }
         })
 
-        // Max retries exceeded, step failed
+        return {
+          success: false,
+          stepName,
+          evidence: workflowState.steps[stepName].evidence,
+          shouldRetry: false
+        }
       }
     }
 
@@ -270,8 +286,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
 }
 
 /**
- * Perform actual Stripe deletion (mock implementation for now)
- * In production, this would integrate with the real Stripe API
+ * Perform actual Stripe deletion using the Stripe connector
  */
 async function performStripeDeletion(
   userIdentifiers: any, 
@@ -283,45 +298,21 @@ async function performStripeDeletion(
   error?: string
 }> {
   try {
-    // Mock Stripe API call
-    // In real implementation: const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+    // Use the Stripe connector
+    const { stripeConnector } = await import('../integrations/index.js')
     
     logger.info('Calling Stripe API to delete customer', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // Call the connector
+    const result = await stripeConnector.deleteCustomer(
+      userIdentifiers.userId,
+      userIdentifiers.emails
+    )
 
-    // Mock successful response (90% success rate for testing)
-    const isSuccess = Math.random() > 0.1
-
-    if (isSuccess) {
-      const receipt = `stripe_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
-      return {
-        success: true,
-        receipt,
-        apiResponse: {
-          id: userIdentifiers.userId,
-          object: 'customer',
-          deleted: true,
-          timestamp: new Date().toISOString()
-        }
-      }
-    } else {
-      return {
-        success: false,
-        error: 'Stripe API returned error: Customer deletion failed',
-        apiResponse: {
-          error: {
-            type: 'api_error',
-            message: 'Customer deletion failed',
-            code: 'customer_deletion_error'
-          }
-        }
-      }
-    }
+    return result
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

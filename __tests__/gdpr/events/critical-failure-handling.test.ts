@@ -32,8 +32,8 @@ const originalMathRandom = Math.random
 const originalSetTimeout = setTimeout
 
 // Import handlers after mocking
-import { handler as stripeHandler } from './stripe-deletion.step.js'
-import { handler as databaseHandler } from './database-deletion.step.js'
+import { handler as stripeHandler } from '../../../src/gdpr/events/stripe-deletion.step.js'
+import { handler as databaseHandler } from '../../../src/gdpr/events/database-deletion.step.js'
 
 describe('Critical Failure Handling Properties', () => {
   beforeEach(() => {

@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import fc from 'fast-check'
-import { WorkflowStateManager } from './workflow-state-manager.js'
-import { UserIdentifiers, WorkflowState } from '../types/index.js'
+import { WorkflowStateManager } from '../../../src/gdpr/services/workflow-state-manager.js'
+import { UserIdentifiers, WorkflowState } from '../../../src/gdpr/types/index.js'
 
 // Mock StateManager for testing
 class MockStateManager {

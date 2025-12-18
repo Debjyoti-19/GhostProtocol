@@ -6,9 +6,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import fc from 'fast-check'
-import { PIIAgent } from './pii-agent.js'
-import { PIIFinding } from '../types/index.js'
-import { ghostProtocolConfig } from '../config/index.js'
+import { PIIAgent } from '../../../src/gdpr/services/pii-agent.js'
+import { PIIFinding } from '../../../src/gdpr/types/index.js'
+import { ghostProtocolConfig } from '../../../src/gdpr/config/index.js'
 
 // Helper to create valid float constraints
 const confidenceFloat = () => fc.float({ min: Math.fround(0.01), max: Math.fround(0.99) }).filter(n => !isNaN(n) && isFinite(n))

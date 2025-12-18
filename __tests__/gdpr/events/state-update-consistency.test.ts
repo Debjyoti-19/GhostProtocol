@@ -6,10 +6,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fc from 'fast-check'
-import { handler as intercomHandler } from './intercom-deletion.step.js'
-import { handler as sendgridHandler } from './sendgrid-deletion.step.js'
-import { handler as crmHandler } from './crm-deletion.step.js'
-import { handler as analyticsHandler } from './analytics-deletion.step.js'
+import { handler as intercomHandler } from '../../../src/gdpr/events/intercom-deletion.step.js'
+import { handler as sendgridHandler } from '../../../src/gdpr/events/sendgrid-deletion.step.js'
+import { handler as crmHandler } from '../../../src/gdpr/events/crm-deletion.step.js'
+import { handler as analyticsHandler } from '../../../src/gdpr/events/analytics-deletion.step.js'
 
 // Mock Motia context
 const createMockContext = () => ({

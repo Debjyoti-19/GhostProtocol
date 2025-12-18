@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import fc from 'fast-check'
-import { PIIAgent } from './pii-agent.js'
+import { PIIAgent } from '../../../src/gdpr/services/pii-agent.js'
 
 describe('PII Agent Audit Completeness Properties', () => {
   let agent: PIIAgent

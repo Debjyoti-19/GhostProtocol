@@ -6,9 +6,9 @@
 
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
-import { CertificateGenerator } from './certificate-generator.js'
-import { AuditTrail } from './audit-trail.js'
-import type { WorkflowState } from '../types/index.js'
+import { CertificateGenerator } from '../../../src/gdpr/services/certificate-generator.js'
+import { AuditTrail } from '../../../src/gdpr/services/audit-trail.js'
+import type { WorkflowState } from '../../../src/gdpr/types/index.js'
 
 describe('Certificate Generation Properties', () => {
 

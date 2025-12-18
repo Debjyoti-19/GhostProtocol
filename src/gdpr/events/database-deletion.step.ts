@@ -294,8 +294,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
 }
 
 /**
- * Perform actual database deletion (mock implementation for now)
- * In production, this would execute database transactions
+ * Perform actual database deletion using the Database connector
  */
 async function performDatabaseDeletion(
   userIdentifiers: any, 
@@ -307,56 +306,32 @@ async function performDatabaseDeletion(
   error?: string
 }> {
   try {
+    // Use the Database connector
+    const { databaseConnector } = await import('../integrations/index.js')
+    
     logger.info('Executing database deletion transaction', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
-    // Simulate database transaction delay
-    await new Promise(resolve => setTimeout(resolve, 150))
+    // Call the connector
+    const result = await databaseConnector.deleteUser(userIdentifiers)
 
-    // Mock successful response (95% success rate for testing)
-    const isSuccess = Math.random() > 0.05
-
-    if (isSuccess) {
-      // Generate mock transaction hash
-      const transactionHash = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      
-      return {
-        success: true,
-        transactionHash,
-        dbResponse: {
-          deletedRecords: {
-            users: 1,
-            user_profiles: 1,
-            user_preferences: 1,
-            user_sessions: 3
-          },
-          transactionId: transactionHash,
-          timestamp: new Date().toISOString(),
-          affectedTables: ['users', 'user_profiles', 'user_preferences', 'user_sessions']
-        }
-      }
-    } else {
-      return {
-        success: false,
-        error: 'Database transaction failed: Foreign key constraint violation',
-        dbResponse: {
-          error: {
-            code: 'FOREIGN_KEY_VIOLATION',
-            message: 'Cannot delete user record due to existing references',
-            constraint: 'fk_user_orders'
-          }
-        }
-      }
+    // Map the result to expected format
+    return {
+      success: result.success,
+      transactionHash: result.transactionHash,
+      dbResponse: result.apiResponse,
+      error: result.error
     }
 
   } catch (error) {
-    logger.error('Database transaction failed', { error: error.message })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Database transaction failed', { error: errorMessage })
     return {
       success: false,
-      error: `Database exception: ${error.message}`,
-      dbResponse: { exception: error.message }
+      error: `Database exception: ${errorMessage}`,
+      dbResponse: { exception: errorMessage }
     }
   }
 }

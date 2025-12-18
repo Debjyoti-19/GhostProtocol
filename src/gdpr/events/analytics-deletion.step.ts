@@ -64,7 +64,7 @@ export const config = {
   input: AnalyticsDeletionInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+export async function handler(data: any, { emit, logger, state }: any): Promise<any> {
   const { workflowId, userIdentifiers, stepName, attempt } = AnalyticsDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -167,6 +167,13 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         }
       })
 
+      return {
+        success: true,
+        stepName,
+        evidence: workflowState.steps[stepName].evidence,
+        shouldRetry: false
+      }
+
     } else {
       // Handle failure with retry logic
       const maxRetries = ghostProtocolConfig.workflow.maxRetryAttempts
@@ -205,6 +212,14 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
             }
           })
         }, retryDelay)
+
+        return {
+          success: false,
+          stepName,
+          evidence: workflowState.steps[stepName].evidence,
+          shouldRetry: true,
+          nextAttempt
+        }
 
       } else {
         // Max retries exceeded, mark as failed
@@ -262,6 +277,13 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
             timestamp
           }
         })
+
+        return {
+          success: false,
+          stepName,
+          evidence: workflowState.steps[stepName].evidence,
+          shouldRetry: false
+        }
       }
     }
 

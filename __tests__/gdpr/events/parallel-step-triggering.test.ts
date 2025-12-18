@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import fc from 'fast-check'
-import { handler as parallelOrchestratorHandler } from './parallel-deletion-orchestrator.step.js'
-import { handler as checkpointHandler } from './checkpoint-validation.step.js'
+import { handler as parallelOrchestratorHandler } from '../../../src/gdpr/events/parallel-deletion-orchestrator.step.js'
+import { handler as checkpointHandler } from '../../../src/gdpr/events/checkpoint-validation.step.js'
 
 // Mock Motia context
 const createMockContext = () => ({

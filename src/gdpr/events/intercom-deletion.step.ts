@@ -312,8 +312,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
 }
 
 /**
- * Perform actual Intercom deletion (mock implementation for now)
- * In production, this would integrate with the real Intercom API
+ * Perform actual Intercom deletion using the Intercom connector
  */
 async function performIntercomDeletion(
   userIdentifiers: any, 
@@ -325,50 +324,26 @@ async function performIntercomDeletion(
   error?: string
 }> {
   try {
+    // Use the Intercom connector
+    const { intercomConnector } = await import('../integrations/index.js')
+    
     logger.info('Calling Intercom API to delete user and conversations', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 200))
+    // Call the connector
+    const result = await intercomConnector.deleteUser(userIdentifiers)
 
-    // Mock successful response (85% success rate for testing)
-    const isSuccess = Math.random() > 0.15
-
-    if (isSuccess) {
-      const receipt = `intercom_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
-      return {
-        success: true,
-        receipt,
-        apiResponse: {
-          user_id: userIdentifiers.userId,
-          deleted_conversations: Math.floor(Math.random() * 10) + 1,
-          deleted_user_data: true,
-          deleted_segments: Math.floor(Math.random() * 3),
-          timestamp: new Date().toISOString()
-        }
-      }
-    } else {
-      return {
-        success: false,
-        error: 'Intercom API returned error: User deletion failed',
-        apiResponse: {
-          error: {
-            type: 'api_error',
-            message: 'User not found or already deleted',
-            code: 'user_not_found'
-          }
-        }
-      }
-    }
+    return result
 
   } catch (error) {
-    logger.error('Intercom API call failed', { error: error.message })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Intercom API call failed', { error: errorMessage })
     return {
       success: false,
-      error: `Intercom API exception: ${error.message}`,
-      apiResponse: { exception: error.message }
+      error: `Intercom API exception: ${errorMessage}`,
+      apiResponse: { exception: errorMessage }
     }
   }
 }

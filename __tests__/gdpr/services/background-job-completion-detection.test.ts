@@ -7,10 +7,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import fc from 'fast-check'
 import { v4 as uuidv4 } from 'uuid'
-import { BackgroundJobManager } from './background-job-manager.js'
-import { WorkflowStateManager } from './workflow-state-manager.js'
-import { PIIAgent } from './pii-agent.js'
-import { BackgroundJob, JobType, JobStatus, WorkflowState } from '../types/index.js'
+import { BackgroundJobManager } from '../../../src/gdpr/services/background-job-manager.js'
+import { WorkflowStateManager } from '../../../src/gdpr/services/workflow-state-manager.js'
+import { PIIAgent } from '../../../src/gdpr/services/pii-agent.js'
+import { BackgroundJob, JobType, JobStatus, WorkflowState } from '../../../src/gdpr/types/index.js'
 
 describe('Background Job Completion Detection Properties', () => {
   let jobManager: BackgroundJobManager

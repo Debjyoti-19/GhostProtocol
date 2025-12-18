@@ -21,7 +21,7 @@ import {
   type PolicyConfig,
   type PIIFinding,
   type BackgroundJob
-} from './index.js'
+} from '../../src/gdpr/schemas/index.js'
 
 describe('Data Model Validation - Property Tests', () => {
   describe('Property 1: Request Validation Consistency', () => {

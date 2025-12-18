@@ -15,7 +15,7 @@ import {
   type Jurisdiction,
   ErasureRequestSchema,
   WorkflowStateSchema
-} from '../schemas/index.js'
+} from '../../../src/gdpr/schemas/index.js'
 
 // Mock state store for testing
 class MockStateStore {

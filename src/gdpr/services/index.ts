@@ -54,3 +54,15 @@ export type {
   LegalHoldOptions,
   LegalHoldStatus
 } from './legal-hold-manager.js'
+
+export { RemediationGuidanceService } from './remediation-guidance.js'
+export type {
+  RemediationGuidance,
+  RemediationAction
+} from './remediation-guidance.js'
+
+export { PolicyManager } from './policy-manager.js'
+export type {
+  PolicyHistoryEntry,
+  PolicyApplicationRecord
+} from './policy-manager.js'

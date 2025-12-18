@@ -44,7 +44,7 @@ export const config = {
   input: CheckpointValidationInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+export async function handler(data: any, { emit, logger, state }: any): Promise<any> {
   const { workflowId, checkpointType, requiredSteps } = CheckpointValidationInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -147,6 +147,14 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         })
       }
 
+      return {
+        success: true,
+        checkpointType,
+        checkpointStatus: 'PASSED',
+        validatedSteps,
+        timestamp
+      }
+
     } else {
       // Checkpoint failed
       if (!workflowState.checkpoints) {
@@ -196,6 +204,15 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
           requiresManualIntervention: true
         }
       })
+
+      return {
+        success: false,
+        checkpointType,
+        checkpointStatus: 'FAILED',
+        validatedSteps,
+        failedSteps,
+        timestamp
+      }
 
     }
 

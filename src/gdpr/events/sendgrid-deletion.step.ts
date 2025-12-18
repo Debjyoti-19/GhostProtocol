@@ -10,6 +10,11 @@ class WorkflowStateError extends Error {
 
 // Configuration constants (inline to avoid import issues)
 const ghostProtocolConfig = {
+  workflow: {
+    maxRetryAttempts: 3,
+    initialRetryDelay: 1000,
+    retryBackoffMultiplier: 2
+  },
   externalSystems: {
     sendgrid: {
       timeout: 10000,
@@ -70,7 +75,7 @@ export const config = {
   input: SendGridDeletionInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+export async function handler(data: any, { emit, logger, state }: any): Promise<any> {
   const { workflowId, userIdentifiers, stepName, attempt } = SendGridDeletionInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -294,10 +299,12 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
     }
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
     logger.error('SendGrid deletion step failed with exception', { 
       workflowId, 
       userId: userIdentifiers.userId,
-      error: error.message 
+      error: errorMessage 
     })
 
     // Emit step failure
@@ -307,7 +314,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
         workflowId,
         stepName,
         status: 'FAILED',
-        error: error.message,
+        error: errorMessage,
         timestamp,
         requiresManualIntervention: false
       }
@@ -318,8 +325,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
 }
 
 /**
- * Perform actual SendGrid deletion (mock implementation for now)
- * In production, this would integrate with the real SendGrid API
+ * Perform actual SendGrid deletion using the SendGrid connector
  */
 async function performSendGridDeletion(
   userIdentifiers: any, 
@@ -331,51 +337,26 @@ async function performSendGridDeletion(
   error?: string
 }> {
   try {
+    // Use the SendGrid connector
+    const { sendGridConnector } = await import('../integrations/index.js')
+    
     logger.info('Calling SendGrid API to delete email lists and templates', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 150))
+    // Call the connector
+    const result = await sendGridConnector.deleteContacts(userIdentifiers)
 
-    // Mock successful response (90% success rate for testing)
-    const isSuccess = Math.random() > 0.10
-
-    if (isSuccess) {
-      const receipt = `sendgrid_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
-      return {
-        success: true,
-        receipt,
-        apiResponse: {
-          user_id: userIdentifiers.userId,
-          deleted_contacts: userIdentifiers.emails.length,
-          deleted_lists: Math.floor(Math.random() * 5) + 1,
-          deleted_templates: Math.floor(Math.random() * 3),
-          suppressed_emails: userIdentifiers.emails,
-          timestamp: new Date().toISOString()
-        }
-      }
-    } else {
-      return {
-        success: false,
-        error: 'SendGrid API returned error: Contact deletion failed',
-        apiResponse: {
-          error: {
-            type: 'api_error',
-            message: 'Rate limit exceeded',
-            code: 'rate_limit_exceeded'
-          }
-        }
-      }
-    }
+    return result
 
   } catch (error) {
-    logger.error('SendGrid API call failed', { error: error.message })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('SendGrid API call failed', { error: errorMessage })
     return {
       success: false,
-      error: `SendGrid API exception: ${error.message}`,
-      apiResponse: { exception: error.message }
+      error: `SendGrid API exception: ${errorMessage}`,
+      apiResponse: { exception: errorMessage }
     }
   }
 }

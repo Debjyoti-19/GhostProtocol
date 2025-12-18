@@ -6,8 +6,8 @@
 
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
-import { AuditTrail, AuditEvent } from './audit-trail.js'
-import { CryptoUtils } from '../utils/crypto.js'
+import { AuditTrail, AuditEvent } from '../../../src/gdpr/services/audit-trail.js'
+import { CryptoUtils } from '../../../src/gdpr/utils/crypto.js'
 
 describe('Immutable Audit Logging Properties', () => {
   

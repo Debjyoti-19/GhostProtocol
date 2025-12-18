@@ -50,7 +50,7 @@ export const config = {
   input: ParallelDeletionOrchestratorInputSchema
 }
 
-export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
+export async function handler(data: any, { emit, logger, state }: any): Promise<any> {
   const { workflowId, userIdentifiers, parallelSteps } = ParallelDeletionOrchestratorInputSchema.parse(data)
   const timestamp = new Date().toISOString()
 
@@ -158,6 +158,13 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
       userId: userIdentifiers.userId,
       triggeredSteps 
     })
+
+    return {
+      success: true,
+      phase: 'parallel-deletion',
+      triggeredSteps,
+      timestamp
+    }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

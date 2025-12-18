@@ -26,15 +26,7 @@ import {
   IdentityValidationError 
 } from '../errors/index.js'
 import { CryptoUtils } from '../utils/index.js'
-// Configuration constants (inline to avoid import issues)
-const ghostProtocolConfig = {
-  workflow: {
-    defaultZombieCheckInterval: 30,
-    maxRetryAttempts: 3,
-    retryBackoffMultiplier: 2,
-    initialRetryDelay: 1000
-  }
-}
+import { PolicyManager } from './policy-manager.js'
 
 export interface WorkflowCreationOptions {
   userIdentifiers: UserIdentifiers
@@ -81,16 +73,18 @@ export interface StateUpdateOptions {
 export class WorkflowStateManager {
   private state: StateManager
   private logger: any
+  private policyManager: PolicyManager
 
   constructor(state: StateManager, logger: any) {
     this.state = state
     this.logger = logger
+    this.policyManager = new PolicyManager(state, logger)
   }
 
   /**
    * Creates a new workflow with proper concurrency control and idempotency checking
    * 
-   * Requirements: 1.3, 1.4, 1.5, 1.6, 1.7
+   * Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 11.1, 11.3
    */
   async createWorkflow(options: WorkflowCreationOptions): Promise<{
     workflowId: string
@@ -106,8 +100,13 @@ export class WorkflowStateManager {
     this.logger.info('Creating workflow', { 
       requestId, 
       workflowId, 
-      userId: options.userIdentifiers.userId 
+      userId: options.userIdentifiers.userId,
+      jurisdiction: options.jurisdiction
     })
+
+    // Get policy for jurisdiction (Requirement 11.1)
+    const policy = await this.policyManager.getPolicyForJurisdiction(options.jurisdiction)
+    const policyVersion = options.policyVersion || policy.version
 
     // Step 1: Check for existing workflows using user identifiers (Requirement 1.3)
     const existingLock = await this.checkUserLock(options.userIdentifiers.userId)
@@ -182,18 +181,21 @@ export class WorkflowStateManager {
     // Step 5: Create data lineage snapshot (Requirement 1.4, 1.7)
     const dataLineageSnapshot = await this.createDataLineageSnapshot(options.userIdentifiers)
 
-    // Step 6: Create initial workflow state
+    // Step 6: Create initial workflow state with policy version (Requirement 11.3)
     const initialWorkflowState: WorkflowState = {
       workflowId,
       userIdentifiers: options.userIdentifiers,
       status: 'IN_PROGRESS',
-      policyVersion: options.policyVersion || '1.0.0',
+      policyVersion,
       legalHolds: [],
       steps: {},
       backgroundJobs: {},
       auditHashes: [CryptoUtils.createHash('GENESIS')], // Genesis hash
       dataLineageSnapshot
     }
+
+    // Record policy application (Requirement 11.3)
+    await this.policyManager.recordPolicyApplication(workflowId, options.jurisdiction)
 
     // Step 7: Create erasure request
     const erasureRequest: ErasureRequest = {
@@ -222,6 +224,8 @@ export class WorkflowStateManager {
       requestId, 
       workflowId,
       userId: options.userIdentifiers.userId,
+      jurisdiction: options.jurisdiction,
+      policyVersion,
       systemsDetected: dataLineageSnapshot.systems.length,
       identifiersDetected: dataLineageSnapshot.identifiers.length
     })
@@ -429,6 +433,13 @@ export class WorkflowStateManager {
    */
   async getErasureRequest(requestId: string): Promise<ErasureRequest | null> {
     return await this.state.get('requests', requestId)
+  }
+
+  /**
+   * Gets the policy manager instance
+   */
+  getPolicyManager(): PolicyManager {
+    return this.policyManager
   }
 
   // Private helper methods

@@ -158,13 +158,11 @@ export class MonitoringStreamManager {
       severity,
       category,
       error,
+      context,
       remediation,
-      metadata: {
-        context,
-        impact,
-        resolution: {
-          status: 'OPEN'
-        }
+      impact,
+      resolution: {
+        status: 'OPEN'
       }
     }
 
@@ -280,40 +278,40 @@ export class MonitoringStreamManager {
           deleted: systemsDeleted,
           failed: systemsFailed,
           legalHolds
-        }
-      },
-      certificateId: certificate?.certificateId,
-      compliance: {
-        jurisdiction: 'EU', // TODO: Get from workflow context
-        policyVersion: workflowState.policyVersion,
-        zombieCheckScheduled: true
-      },
-      metadata: {
+        },
         backgroundJobs: {
           total: backgroundJobEntries.length,
           completed: jobsCompleted,
           failed: jobsFailed,
           piiFindings: totalPiiFindings
-        },
-        certificate: certificate ? {
-          certificateId: certificate.certificateId,
-          auditHashRoot: certificate.auditHashRoot,
-          signature: certificate.signature
-        } : undefined,
+        }
+      },
+      certificateId: certificate?.certificateId,
+      certificate: certificate ? {
+        certificateId: certificate.certificateId,
+        auditHashRoot: certificate.auditHashRoot,
+        signature: certificate.signature
+      } : undefined,
+      legalHolds: workflowState.legalHolds.map(hold => ({
+        system: hold.system,
+        reason: hold.reason,
+        expiresAt: hold.expiresAt
+      })),
+      compliance: {
+        jurisdiction: 'EU', // TODO: Get from workflow context
+        policyVersion: workflowState.policyVersion,
+        zombieCheckScheduled: true,
+        zombieCheckDate
+      },
+      nextActions,
+      metadata: {
         exceptions: systemsFailed > 0 ? stepEntries
           .filter(([_, step]) => step.status === 'FAILED')
           .map(([stepName, step]) => ({
             system: stepName,
             error: step.evidence.receipt || 'Unknown error',
             remediation: 'Manual intervention required'
-          })) : undefined,
-        legalHolds: workflowState.legalHolds.map(hold => ({
-          system: hold.system,
-          reason: hold.reason,
-          expiresAt: hold.expiresAt
-        })),
-        nextActions,
-        zombieCheckDate
+          })) : undefined
       }
     }
 
@@ -373,14 +371,11 @@ export class MonitoringStreamManager {
 
       const updatedError: ErrorNotification = {
         ...existingError,
-        metadata: {
-          ...existingError.metadata,
-          resolution: {
-            status,
-            resolvedAt: new Date().toISOString(),
-            resolvedBy,
-            resolution
-          }
+        resolution: {
+          status,
+          resolvedAt: new Date().toISOString(),
+          resolvedBy,
+          resolution
         }
       }
 

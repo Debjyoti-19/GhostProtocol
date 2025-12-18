@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { GhostProtocolError, WorkflowLockError } from './errors/index.js'
-import { CryptoUtils } from './utils/index.js'
-import { ghostProtocolConfig } from './config/index.js'
+import { GhostProtocolError, WorkflowLockError } from '../../src/gdpr/errors/index.js'
+import { CryptoUtils } from '../../src/gdpr/utils/index.js'
+import { ghostProtocolConfig } from '../../src/gdpr/config/index.js'
 
 describe('GhostProtocol Infrastructure Setup', () => {
   it('should create custom errors with proper metadata', () => {

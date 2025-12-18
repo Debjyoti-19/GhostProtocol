@@ -34,14 +34,36 @@ export const completionNotificationSchema = z.object({
       deleted: z.number(),
       failed: z.number(),
       legalHolds: z.number()
-    })
+    }),
+    backgroundJobs: z.object({
+      total: z.number(),
+      completed: z.number(),
+      failed: z.number(),
+      piiFindings: z.number()
+    }).optional()
   }),
   certificateId: z.string().optional(),
+  certificate: z.object({
+    certificateId: z.string(),
+    auditHashRoot: z.string(),
+    signature: z.string()
+  }).optional(),
+  legalHolds: z.array(z.object({
+    system: z.string(),
+    reason: z.string(),
+    expiresAt: z.string().optional()
+  })).optional(),
   compliance: z.object({
     jurisdiction: z.enum(['EU', 'US', 'OTHER']),
     policyVersion: z.string(),
-    zombieCheckScheduled: z.boolean()
+    zombieCheckScheduled: z.boolean(),
+    zombieCheckDate: z.string().optional()
   }),
+  nextActions: z.array(z.object({
+    action: z.string(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+    dueDate: z.string()
+  })).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 })
 

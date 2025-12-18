@@ -312,8 +312,7 @@ export async function handler(data: any, { emit, logger, state }: any): Promise<
 }
 
 /**
- * Perform actual CRM deletion (mock implementation for now)
- * In production, this would integrate with the real CRM API (Salesforce, HubSpot, etc.)
+ * Perform actual CRM deletion using the CRM connector
  */
 async function performCRMDeletion(
   userIdentifiers: any, 
@@ -325,52 +324,26 @@ async function performCRMDeletion(
   error?: string
 }> {
   try {
+    // Use the CRM connector
+    const { crmConnector } = await import('../integrations/index.js')
+    
     logger.info('Calling CRM API to delete customer records', { 
       userId: userIdentifiers.userId,
       emails: userIdentifiers.emails 
     })
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300))
+    // Call the connector
+    const result = await crmConnector.deleteCustomer(userIdentifiers)
 
-    // Mock successful response (80% success rate for testing)
-    const isSuccess = Math.random() > 0.20
-
-    if (isSuccess) {
-      const receipt = `crm_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
-      return {
-        success: true,
-        receipt,
-        apiResponse: {
-          user_id: userIdentifiers.userId,
-          deleted_contacts: 1,
-          deleted_opportunities: Math.floor(Math.random() * 3),
-          deleted_activities: Math.floor(Math.random() * 15) + 5,
-          deleted_notes: Math.floor(Math.random() * 8),
-          archived_deals: Math.floor(Math.random() * 2),
-          timestamp: new Date().toISOString()
-        }
-      }
-    } else {
-      return {
-        success: false,
-        error: 'CRM API returned error: Contact has active deals',
-        apiResponse: {
-          error: {
-            type: 'business_rule_violation',
-            message: 'Cannot delete contact with active deals',
-            code: 'active_deals_exist'
-          }
-        }
-      }
-    }
+    return result
 
   } catch (error) {
-    logger.error('CRM API call failed', { error: error.message })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('CRM API call failed', { error: errorMessage })
     return {
       success: false,
-      error: `CRM API exception: ${error.message}`,
-      apiResponse: { exception: error.message }
+      error: `CRM API exception: ${errorMessage}`,
+      apiResponse: { exception: errorMessage }
     }
   }
 }

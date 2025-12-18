@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fc from 'fast-check'
-import { ghostProtocolConfig } from '../config/index.js'
+import { ghostProtocolConfig } from '../../../src/gdpr/config/index.js'
 
 describe('Property 8: Retry Logic Correctness', () => {
   beforeEach(() => {

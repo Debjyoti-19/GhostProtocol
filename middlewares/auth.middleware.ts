@@ -4,7 +4,21 @@ import { IdentityValidationError } from '../src/gdpr/errors/index.js'
 /**
  * Authentication middleware for GhostProtocol
  * Validates JWT tokens and enforces role-based access control
+ * 
+ * Requirements: 7.2
  */
+
+// User roles for RBAC
+export type UserRole = 'Legal' | 'Compliance Admin' | 'Auditor' | 'System Admin'
+
+export interface AuthenticatedUser {
+  userId: string
+  email: string
+  role: UserRole
+  organization: string
+  permissions?: string[]
+}
+
 export const authMiddleware = {
   name: 'auth',
   handler: async (context: any, next: () => Promise<any>) => {
@@ -23,9 +37,10 @@ export const authMiddleware = {
 
       // Add user information to context
       context.user = {
-        userId: decoded.sub,
+        userId: decoded.sub || decoded.userId,
+        email: decoded.email,
         role: decoded.role,
-        organization: decoded.org,
+        organization: decoded.org || decoded.organization,
         permissions: decoded.permissions || []
       }
 
@@ -39,18 +54,83 @@ export const authMiddleware = {
 /**
  * Role-based authorization middleware
  * Checks if user has required role for the operation
+ * Supports multiple roles
  */
-export const requireRole = (requiredRole: string) => ({
-  name: `require-role-${requiredRole}`,
+export const requireRole = (...allowedRoles: string[]) => ({
+  name: `require-role-${allowedRoles.join('-')}`,
   handler: async (context: any, next: () => Promise<any>) => {
     if (!context.user) {
       throw new IdentityValidationError('Authentication required')
     }
 
-    if (context.user.role !== requiredRole && context.user.role !== 'admin') {
-      throw new IdentityValidationError(`Insufficient permissions. Required role: ${requiredRole}`)
+    // System Admin has access to everything
+    if (context.user.role === 'System Admin') {
+      return await next()
+    }
+
+    if (!allowedRoles.includes(context.user.role)) {
+      throw new IdentityValidationError(
+        `Insufficient permissions. Required roles: ${allowedRoles.join(', ')}`
+      )
     }
 
     return await next()
   }
 })
+
+/**
+ * Helper functions for role checking
+ */
+export const hasRole = (user: AuthenticatedUser | undefined, ...roles: UserRole[]): boolean => {
+  if (!user) return false
+  return roles.includes(user.role)
+}
+
+export const canOverride = (user: AuthenticatedUser | undefined): boolean => {
+  return hasRole(user, 'Legal', 'Compliance Admin', 'System Admin')
+}
+
+export const canDownloadCertificate = (user: AuthenticatedUser | undefined): boolean => {
+  return hasRole(user, 'Legal', 'Compliance Admin', 'Auditor', 'System Admin')
+}
+
+export const canAccessStreams = (user: AuthenticatedUser | undefined): boolean => {
+  return hasRole(user, 'Legal', 'Compliance Admin', 'Auditor', 'System Admin')
+}
+
+/**
+ * Generate JWT token for testing/demo purposes
+ */
+export const generateToken = (user: AuthenticatedUser): string => {
+  const JWT_SECRET = process.env.JWT_SECRET || 'ghost-protocol-dev-secret'
+  return jwt.sign(
+    {
+      sub: user.userId,
+      userId: user.userId,
+      email: user.email,
+      role: user.role,
+      org: user.organization,
+      organization: user.organization
+    },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  )
+}
+
+/**
+ * Create demo tokens for different roles
+ */
+export const createDemoTokens = () => {
+  const roles: UserRole[] = ['Legal', 'Compliance Admin', 'Auditor', 'System Admin']
+  
+  return roles.reduce((tokens, role) => {
+    const user: AuthenticatedUser = {
+      userId: `demo-${role.toLowerCase().replace(' ', '-')}`,
+      email: `${role.toLowerCase().replace(' ', '.')}@ghostprotocol.demo`,
+      role,
+      organization: 'GhostProtocol Demo'
+    }
+    tokens[role] = generateToken(user)
+    return tokens
+  }, {} as Record<UserRole, string>)
+}

@@ -28,15 +28,35 @@ export const errorNotificationSchema = z.object({
   error: z.object({
     code: z.string(),
     message: z.string(),
-    details: z.string().optional(),
-    stackTrace: z.string().optional()
+    details: z.string().nullable().optional(),
+    stackTrace: z.string().nullable().optional()
   }),
+  context: z.object({
+    stepName: z.string().nullable().optional(),
+    system: z.string().nullable().optional(),
+    userId: z.string().nullable().optional(),
+    requestId: z.string().nullable().optional(),
+    attemptNumber: z.number().nullable().optional()
+  }).optional(),
   remediation: z.object({
     description: z.string(),
     actions: z.array(z.string()),
     retryable: z.boolean(),
-    escalationRequired: z.boolean()
+    escalationRequired: z.boolean(),
+    estimatedResolutionTime: z.string().nullable().optional()
   }),
+  impact: z.object({
+    affectedSystems: z.array(z.string()),
+    dataAtRisk: z.boolean(),
+    complianceImpact: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+    userImpact: z.string().nullable().optional()
+  }).optional(),
+  resolution: z.object({
+    status: z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'ESCALATED']),
+    resolvedBy: z.string().nullable().optional(),
+    resolution: z.string().nullable().optional(),
+    resolvedAt: z.string().nullable().optional()
+  }).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 })
 

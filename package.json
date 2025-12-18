@@ -21,6 +21,7 @@
     "motia"
   ],
   "dependencies": {
+    "@hubspot/api-client": "^13.4.0",
     "@motiadev/adapter-bullmq-events": "^0.17.8-beta.190",
     "@motiadev/core": "^0.17.8-beta.190",
     "@motiadev/plugin-bullmq": "^0.17.8-beta.190",
@@ -34,7 +35,10 @@
     "@types/pg": "^8.16.0",
     "dotenv": "^17.2.3",
     "groq-sdk": "^0.37.0",
+    "intercom-client": "^6.4.0",
     "jsonwebtoken": "^9.0.2",
+    "minio": "^8.0.6",
+    "mixpanel": "^0.19.1",
     "motia": "^0.17.8-beta.190",
     "pg": "^8.16.3",
     "stripe": "^20.1.0",

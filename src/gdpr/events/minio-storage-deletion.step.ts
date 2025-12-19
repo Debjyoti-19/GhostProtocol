@@ -1,12 +1,14 @@
 /**
- * MinIO Storage Deletion Event Step
+ * MinIO Storage Deletion Event Step (Background Job)
  * 
  * Scan and delete user files from MinIO object storage.
- * Replaces AWS S3 cold storage scan with local MinIO.
+ * This is a BACKGROUND JOB that runs independently from the main workflow.
+ * Triggered by the orchestrator alongside the main deletion chain.
  * Requirements: 3.1, 4.1, 4.2, 4.3
  */
 
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Lenient schema
 const MinIODeletionInputSchema = z.object({
@@ -18,70 +20,178 @@ const MinIODeletionInputSchema = z.object({
     aliases: z.array(z.string()).optional().default([])
   }),
   stepName: z.string().default('minio-storage-deletion'),
-  attempt: z.number().int().min(1).default(1)
+  attempt: z.number().int().min(1).default(1),
+  // Background job specific fields
+  resumeFromCheckpoint: z.string().optional(),
+  batchSize: z.number().int().min(1).max(10000).default(1000)
 })
 
 export const config = {
   name: 'MinIOStorageDeletion',
   type: 'event' as const,
-  description: 'Scan and delete user files from MinIO object storage',
+  description: 'Background job: Scan and delete user files from MinIO object storage',
   flows: ['erasure-workflow'],
   subscribes: ['minio-storage-deletion'],
-  emits: ['step-completed', 'step-failed', 'audit-log', 'minio-storage-deletion'],
+  emits: ['background-job-progress', 'audit-log', 'minio-storage-deletion'],
   input: MinIODeletionInputSchema
 }
 
 export async function handler(data: any, { emit, logger }: any): Promise<void> {
   const parsed = MinIODeletionInputSchema.parse(data)
-  const { workflowId, userIdentifiers, stepName, attempt } = parsed
+  const { workflowId, userIdentifiers, stepName, attempt, resumeFromCheckpoint } = parsed
   const timestamp = new Date().toISOString()
+  const jobId = uuidv4()
 
-  logger.info('Starting MinIO storage deletion', { 
+  logger.info('Starting MinIO storage background job', { 
     workflowId, 
+    jobId,
     userId: userIdentifiers.userId,
-    attempt 
+    attempt,
+    isResume: !!resumeFromCheckpoint
+  })
+
+  // Emit job started
+  await emit({
+    topic: 'background-job-progress',
+    data: {
+      jobId,
+      workflowId,
+      jobType: 'MINIO_STORAGE_SCAN',
+      status: resumeFromCheckpoint ? 'RESUMED' : 'STARTED',
+      progress: 0,
+      timestamp
+    }
   })
 
   try {
-    const minioResult = await performMinIODeletion(userIdentifiers, logger)
+    const minioResult = await performMinIODeletion(userIdentifiers, logger, async (progress: number, details: any) => {
+      // Progress callback for long-running scans
+      await emit({
+        topic: 'background-job-progress',
+        data: {
+          jobId,
+          workflowId,
+          jobType: 'MINIO_STORAGE_SCAN',
+          status: 'RUNNING',
+          progress,
+          ...details,
+          timestamp: new Date().toISOString()
+        }
+      })
+    })
 
     if (minioResult.success) {
-      logger.info('MinIO deletion completed', { 
+      logger.info('MinIO background job completed', { 
         workflowId, 
+        jobId,
         filesDeleted: minioResult.apiResponse?.filesDeleted,
         bytesFreed: minioResult.apiResponse?.bytesFreed,
         receipt: minioResult.receipt
       })
 
-      await emit({ topic: 'step-completed', data: { workflowId, stepName, status: 'DELETED', timestamp } })
-      await emit({ topic: 'audit-log', data: { 
-        event: 'MINIO_STORAGE_DELETION_COMPLETED', 
-        workflowId, 
-        stepName, 
-        timestamp,
-        receipt: minioResult.receipt,
-        filesDeleted: minioResult.apiResponse?.filesDeleted
-      }})
+      // Emit job completed
+      await emit({
+        topic: 'background-job-progress',
+        data: {
+          jobId,
+          workflowId,
+          jobType: 'MINIO_STORAGE_SCAN',
+          status: 'COMPLETED',
+          progress: 100,
+          filesScanned: minioResult.apiResponse?.filesScanned,
+          filesDeleted: minioResult.apiResponse?.filesDeleted,
+          bytesFreed: minioResult.apiResponse?.bytesFreed,
+          receipt: minioResult.receipt,
+          timestamp: new Date().toISOString()
+        }
+      })
+
+      await emit({ 
+        topic: 'audit-log', 
+        data: { 
+          event: 'MINIO_BACKGROUND_JOB_COMPLETED', 
+          workflowId, 
+          jobId,
+          stepName, 
+          timestamp: new Date().toISOString(),
+          receipt: minioResult.receipt,
+          filesDeleted: minioResult.apiResponse?.filesDeleted,
+          bytesFreed: minioResult.apiResponse?.bytesFreed
+        }
+      })
 
     } else {
       const maxRetries = 3
       const errorMsg = (minioResult as any).error || 'Unknown error'
+      
       if (attempt < maxRetries) {
-        logger.warn('MinIO deletion failed, scheduling retry', { workflowId, attempt, error: errorMsg })
+        logger.warn('MinIO background job failed, scheduling retry', { workflowId, jobId, attempt, error: errorMsg })
+        
+        await emit({
+          topic: 'background-job-progress',
+          data: {
+            jobId,
+            workflowId,
+            jobType: 'MINIO_STORAGE_SCAN',
+            status: 'RETRYING',
+            error: errorMsg,
+            attempt,
+            nextAttempt: attempt + 1,
+            timestamp: new Date().toISOString()
+          }
+        })
+
         await emit({ topic: 'minio-storage-deletion', data: { ...parsed, attempt: attempt + 1 } })
       } else {
-        logger.error('MinIO deletion failed after max retries', { workflowId, error: errorMsg })
-        await emit({ topic: 'step-failed', data: { workflowId, stepName, error: errorMsg, timestamp } })
+        logger.error('MinIO background job failed after max retries', { workflowId, jobId, error: errorMsg })
+        
+        await emit({
+          topic: 'background-job-progress',
+          data: {
+            jobId,
+            workflowId,
+            jobType: 'MINIO_STORAGE_SCAN',
+            status: 'FAILED',
+            error: errorMsg,
+            timestamp: new Date().toISOString()
+          }
+        })
+
+        await emit({
+          topic: 'audit-log',
+          data: {
+            event: 'MINIO_BACKGROUND_JOB_FAILED',
+            workflowId,
+            jobId,
+            error: errorMsg,
+            timestamp: new Date().toISOString()
+          }
+        })
       }
     }
 
   } catch (error: any) {
-    logger.error('MinIO deletion error', { workflowId, error: error.message })
-    await emit({ topic: 'step-failed', data: { workflowId, stepName, error: error.message, timestamp } })
+    logger.error('MinIO background job error', { workflowId, jobId, error: error.message })
+    
+    await emit({
+      topic: 'background-job-progress',
+      data: {
+        jobId,
+        workflowId,
+        jobType: 'MINIO_STORAGE_SCAN',
+        status: 'FAILED',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }
+    })
   }
 }
 
-async function performMinIODeletion(userIdentifiers: any, logger: any) {
+async function performMinIODeletion(
+  userIdentifiers: any, 
+  logger: any,
+  onProgress?: (progress: number, details: any) => Promise<void>
+) {
   const endpoint = process.env.MINIO_ENDPOINT
   const port = process.env.MINIO_PORT
   const accessKey = process.env.MINIO_ACCESS_KEY
@@ -91,7 +201,7 @@ async function performMinIODeletion(userIdentifiers: any, logger: any) {
 
   if (!endpoint || !accessKey || !secretKey || !bucket) {
     logger.info('MinIO credentials not set, using mock mode')
-    return performMockMinIODeletion(userIdentifiers, logger)
+    return performMockMinIODeletion(userIdentifiers, logger, onProgress)
   }
 
   try {
@@ -137,16 +247,47 @@ async function performMinIODeletion(userIdentifiers: any, logger: any) {
 
     logger.info('Found objects in bucket', { count: objects.length })
 
-    // Search for user-related files
-    const userPatterns = [
+    // Search for user-related files - build comprehensive patterns
+    const rawPatterns = [
       userIdentifiers.userId,
       ...userIdentifiers.emails,
       ...userIdentifiers.aliases
-    ].filter(Boolean).map(p => p.toLowerCase())
+    ].filter(Boolean)
+    
+    // Generate multiple pattern variations for each identifier
+    const userPatterns: string[] = []
+    for (const p of rawPatterns) {
+      const lower = p.toLowerCase()
+      userPatterns.push(lower)
+      userPatterns.push(lower.replace(/@/g, '_at_'))  // email@domain.com -> email_at_domain.com
+      userPatterns.push(lower.replace(/[@.]/g, '_'))  // email@domain.com -> email_domain_com
+      userPatterns.push(lower.replace(/ /g, '_'))     // "E2E Test User" -> "e2e_test_user"
+      userPatterns.push(lower.replace(/[^a-z0-9]/g, '_')) // any special char -> underscore
+      // For emails, also match the local part (before @)
+      if (p.includes('@')) {
+        const localPart = p.split('@')[0].toLowerCase()
+        userPatterns.push(localPart)
+        userPatterns.push(localPart.replace(/\./g, '_'))
+      }
+    }
+    logger.info('MinIO user patterns', { patterns: userPatterns.slice(0, 8) })
 
-    for (const obj of objects) {
+    const totalObjects = objects.length
+
+    for (let i = 0; i < objects.length; i++) {
+      const obj = objects[i]
       deletionResults.filesScanned++
       const objectName = obj.name.toLowerCase()
+
+      // Report progress every 10 files or at completion
+      if (onProgress && (i % 10 === 0 || i === objects.length - 1)) {
+        const progress = Math.round((i / totalObjects) * 100)
+        await onProgress(progress, {
+          filesScanned: deletionResults.filesScanned,
+          filesDeleted: deletionResults.filesDeleted,
+          currentFile: obj.name
+        })
+      }
 
       // Check if file belongs to user (by name pattern)
       const isUserFile = userPatterns.some(pattern => 
@@ -192,9 +333,26 @@ async function performMinIODeletion(userIdentifiers: any, logger: any) {
   }
 }
 
-async function performMockMinIODeletion(userIdentifiers: any, logger: any) {
-  logger.info('Running mock MinIO deletion', { userId: userIdentifiers.userId })
-  await new Promise(resolve => setTimeout(resolve, 200))
+async function performMockMinIODeletion(
+  userIdentifiers: any, 
+  logger: any,
+  onProgress?: (progress: number, details: any) => Promise<void>
+) {
+  logger.info('Running mock MinIO background job', { userId: userIdentifiers.userId })
+  
+  // Simulate scanning progress
+  const mockFiles = ['user_data.json', 'profile_backup.zip', 'exports/user_001.csv']
+  
+  for (let i = 0; i <= 100; i += 20) {
+    if (onProgress) {
+      await onProgress(i, {
+        filesScanned: Math.floor(i / 2),
+        filesDeleted: Math.floor(i / 33),
+        currentFile: mockFiles[Math.floor(i / 40)] || 'scanning...'
+      })
+    }
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
 
   return {
     success: true,
@@ -203,7 +361,7 @@ async function performMockMinIODeletion(userIdentifiers: any, logger: any) {
       filesScanned: 50,
       filesDeleted: 3,
       bytesFreed: 1024 * 1024 * 5, // 5MB
-      userFilesFound: ['user_data.json', 'profile_backup.zip', 'exports/user_001.csv'],
+      userFilesFound: mockFiles,
       errors: [],
       mock: true
     }

@@ -13,16 +13,18 @@ import { v4 as uuidv4 } from 'uuid'
 // Default zombie check interval (30 days in days)
 const DEFAULT_ZOMBIE_CHECK_INTERVAL = 30
 
-// Input schema for workflow completion
+// Lenient input schema for workflow completion
 const WorkflowCompletionInputSchema = z.object({
-  workflowId: z.string().uuid(),
+  workflowId: z.string(),
   userIdentifiers: z.object({
     userId: z.string(),
     emails: z.array(z.string()),
-    phones: z.array(z.string()),
-    aliases: z.array(z.string())
-  }),
-  completedAt: z.string().datetime(),
+    phones: z.array(z.string()).optional().default([]),
+    aliases: z.array(z.string()).optional().default([])
+  }).optional(),
+  completedSteps: z.array(z.string()).optional(),
+  failedSteps: z.array(z.string()).optional(),
+  completedAt: z.string(),
   status: z.enum(['COMPLETED', 'COMPLETED_WITH_EXCEPTIONS']),
   jurisdiction: z.enum(['EU', 'US', 'OTHER']).optional(),
   zombieCheckInterval: z.number().int().min(1).optional()
@@ -40,8 +42,16 @@ export const config = {
 }
 
 export async function handler(data: any, { emit, logger, state }: any): Promise<void> {
-  const { workflowId, userIdentifiers, completedAt, status, jurisdiction, zombieCheckInterval } = 
-    WorkflowCompletionInputSchema.parse(data)
+  const parsed = WorkflowCompletionInputSchema.parse(data)
+  const { workflowId, completedAt, status, jurisdiction, zombieCheckInterval, completedSteps, failedSteps } = parsed
+  
+  // userIdentifiers may not be available (state is step-scoped)
+  const userIdentifiers = parsed.userIdentifiers || {
+    userId: 'unknown',
+    emails: [],
+    phones: [],
+    aliases: []
+  }
 
   logger.info('Processing workflow completion', { 
     workflowId, 

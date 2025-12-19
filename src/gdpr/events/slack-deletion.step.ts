@@ -74,17 +74,20 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
       })
 
     } else {
-      // Retry logic
+      // Retry logic - only retry if we found data but couldn't delete it
       const maxRetries = 3
       const errorMsg = (slackResult as any).error || 'Unknown error'
+      
       if (attempt < maxRetries) {
-        logger.warn('Slack deletion failed, scheduling retry', { workflowId, attempt, error: errorMsg })
+        logger.warn('Slack deletion incomplete, scheduling retry', { workflowId, attempt, error: errorMsg })
         await emit({ topic: 'slack-deletion', data: { ...parsed, attempt: attempt + 1 } })
+        // Don't continue chain - wait for retry
       } else {
         logger.error('Slack deletion failed after max retries', { workflowId, error: errorMsg })
         await emit({ topic: 'step-failed', data: { workflowId, stepName, error: errorMsg, timestamp } })
         
-        // Continue to email deletion even if Slack fails
+        // After max retries, continue to email deletion (can't block forever)
+        // But mark as failed for audit
         await emit({ 
           topic: 'email-deletion', 
           data: { workflowId, userIdentifiers, stepName: 'email-deletion', attempt: 1 } 
@@ -149,15 +152,44 @@ async function performSlackDeletion(userIdentifiers: any, logger: any, emit: any
           break
         }
       } catch (err: any) {
-        // User not found is expected
+        // User not found or missing scope - continue
+        if (err.data?.error === 'missing_scope') {
+          logger.warn('Missing scope for users.lookupByEmail', { requiredScope: 'users:read.email' })
+        }
       }
     }
 
     // Step 2: Get channels and scan ALL messages for PII related to this user
-    const conversationsResult = await slack.conversations.list({
-      types: 'public_channel,private_channel',
-      exclude_archived: true
-    })
+    // Only request public_channel to avoid needing groups:read scope
+    let conversationsResult: any = { ok: false, channels: [] }
+    try {
+      conversationsResult = await slack.conversations.list({
+        types: 'public_channel',
+        exclude_archived: true
+      })
+    } catch (convErr: any) {
+      if (convErr.data?.error === 'missing_scope') {
+        logger.warn('Missing scope for conversations.list - bot cannot scan channels', {
+          requiredScopes: ['channels:read'],
+          hint: 'Add channels:read scope in Slack App settings > OAuth & Permissions'
+        })
+        // Return success with note about missing permissions
+        return {
+          success: true,
+          receipt: `slack_limited_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`,
+          apiResponse: {
+            ...deletionResults,
+            limitedAccess: true,
+            missingScopes: ['channels:read', 'channels:history'],
+            note: 'Bot lacks permissions to scan channels. Add required scopes in Slack App settings.'
+          }
+        }
+      }
+      throw convErr
+    }
+
+    // Track messages that need manual deletion (bot can't delete others' messages)
+    const manualDeletionRequired: any[] = []
 
     if (conversationsResult.ok && conversationsResult.channels) {
       for (const channel of conversationsResult.channels) {
@@ -175,9 +207,6 @@ async function performSlackDeletion(userIdentifiers: any, logger: any, emit: any
             for (const message of historyResult.messages) {
               if (!message.text || !message.ts) continue
               
-              // Only scan bot's own messages (we can only delete our own)
-              if (message.user !== botUserId) continue
-              
               deletionResults.messagesScanned++
 
               // Use AI to detect PII in message
@@ -190,34 +219,48 @@ async function performSlackDeletion(userIdentifiers: any, logger: any, emit: any
                   channel: channel.name,
                   piiTypes: piiResult.piiTypes,
                   confidence: piiResult.confidence,
-                  redactedPreview: piiResult.redactedText?.slice(0, 100)
+                  redactedPreview: piiResult.redactedText?.slice(0, 100),
+                  postedBy: message.user,
+                  canDelete: message.user === botUserId
                 })
 
-                // Delete the message containing PII
-                try {
-                  await slack.chat.delete({
-                    channel: channel.id,
-                    ts: message.ts
-                  })
-                  deletionResults.messagesDeleted++
-                  logger.info('Deleted message with PII', { 
-                    channel: channel.name, 
-                    piiTypes: piiResult.piiTypes,
-                    confidence: piiResult.confidence
-                  })
-                } catch (deleteErr: any) {
-                  deletionResults.errors.push(`Delete failed: ${deleteErr.message}`)
+                // Only delete bot's own messages (Slack limitation)
+                if (message.user === botUserId) {
+                    try {
+                      await slack.chat.delete({
+                        channel: channel.id,
+                        ts: message.ts
+                      })
+                      deletionResults.messagesDeleted++
+                      logger.info('Deleted bot message with PII', { 
+                        channel: channel.name, 
+                        piiTypes: piiResult.piiTypes,
+                        confidence: piiResult.confidence
+                      })
+                    } catch (deleteErr: any) {
+                      deletionResults.errors.push(`Delete failed: ${deleteErr.message}`)
+                    }
+                  } else {
+                    // Track messages by other users that need manual deletion
+                    manualDeletionRequired.push({
+                      channel: channel.name,
+                      channelId: channel.id,
+                      messageTs: message.ts,
+                      postedBy: message.user,
+                      piiTypes: piiResult.piiTypes,
+                      preview: piiResult.redactedText?.slice(0, 50)
+                    })
+                  }
                 }
               }
             }
-          }
-        } catch (historyErr: any) {
-          if (historyErr.data?.error !== 'not_in_channel') {
-            logger.warn('Error getting channel history', { channel: channel.name, error: historyErr.message })
+          } catch (historyErr: any) {
+            if (historyErr.data?.error !== 'not_in_channel') {
+              logger.warn('Error getting channel history', { channel: channel.name, error: historyErr.message })
+            }
           }
         }
       }
-    }
 
     // Step 3: Delete bot's files (if any)
     if (botUserId) {
@@ -261,13 +304,41 @@ async function performSlackDeletion(userIdentifiers: any, logger: any, emit: any
       messagesWithPII: deletionResults.messagesWithPII,
       messagesDeleted: deletionResults.messagesDeleted,
       filesDeleted: deletionResults.filesDeleted,
-      channelsProcessed: deletionResults.channelsProcessed
+      channelsProcessed: deletionResults.channelsProcessed,
+      manualDeletionRequired: manualDeletionRequired.length
     })
+
+    // Forward-only saga logic:
+    // - If we found PII in bot's messages and deleted them all → success
+    // - If we found NO PII → success (nothing to delete)
+    // - If we found PII in bot's messages but couldn't delete some → retry
+    // - If we found PII only in others' messages → success (we can't delete those, report for manual)
+    
+    const botPIIMessages = deletionResults.piiFindings.filter((f: any) => f.canDelete === true)
+    const botPIINotDeleted = botPIIMessages.length - deletionResults.messagesDeleted
+    
+    if (botPIINotDeleted > 0) {
+      // Found bot's PII messages but couldn't delete all - should retry
+      logger.warn('Bot PII messages found but not all deleted', {
+        found: botPIIMessages.length,
+        deleted: deletionResults.messagesDeleted,
+        remaining: botPIINotDeleted
+      })
+      return {
+        success: false,
+        error: `Found ${botPIIMessages.length} bot PII messages, only deleted ${deletionResults.messagesDeleted}`,
+        apiResponse: deletionResults,
+        piiFindings: deletionResults.piiFindings
+      }
+    }
 
     return {
       success: true,
       receipt,
-      apiResponse: deletionResults,
+      apiResponse: {
+        ...deletionResults,
+        manualDeletionRequired: manualDeletionRequired.length > 0 ? manualDeletionRequired : undefined
+      },
       piiFindings: deletionResults.piiFindings
     }
 

@@ -130,39 +130,60 @@ async function performSendGridDeletion(userIdentifiers: any, logger: any, emit: 
     for (const email of userIdentifiers.emails) {
       logger.info('Processing email for deletion', { email })
 
-      // Step 1: Search for contact by email
-      try {
-        const [searchResponse] = await sgClient.request({
-          url: '/v3/marketing/contacts/search/emails',
-          method: 'POST',
-          body: { emails: [email] }
-        })
+      // Step 1: Search for contact by email (with retry for indexing delay)
+      let contactData: any = null
+      for (let searchAttempt = 0; searchAttempt < 3; searchAttempt++) {
+        try {
+          const [searchResponse] = await sgClient.request({
+            url: '/v3/marketing/contacts/search/emails',
+            method: 'POST',
+            body: { emails: [email] }
+          })
 
-        const contacts = (searchResponse.body as any)?.result || {}
-        const contactData = contacts[email]?.contact
-
-        if (contactData?.id) {
-          deletionResults.contactsSearched++
-          logger.info('Found SendGrid contact', { email, contactId: contactData.id })
-
-          // Step 2: Delete the contact
-          try {
-            await sgClient.request({
-              url: `/v3/marketing/contacts?ids=${contactData.id}`,
-              method: 'DELETE'
-            })
-            deletionResults.contactsDeleted++
-            logger.info('Deleted SendGrid contact', { email, contactId: contactData.id })
-          } catch (deleteErr: any) {
-            deletionResults.errors.push(`Delete contact ${email}: ${deleteErr.message}`)
+          const contacts = (searchResponse.body as any)?.result || {}
+          contactData = contacts[email]?.contact
+          
+          if (contactData?.id) {
+            break // Found contact
           }
-        } else {
-          logger.info('No SendGrid contact found', { email })
+          
+          // If not found and not last attempt, wait and retry (SendGrid indexing delay)
+          if (searchAttempt < 2) {
+            logger.info('Contact not found yet, waiting for SendGrid indexing', { email, attempt: searchAttempt + 1 })
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
+        } catch (searchErr: any) {
+          if (searchErr.code !== 404) {
+            deletionResults.errors.push(`Search ${email}: ${searchErr.message}`)
+          }
+          break
         }
-      } catch (searchErr: any) {
-        if (searchErr.code !== 404) {
-          deletionResults.errors.push(`Search ${email}: ${searchErr.message}`)
+      }
+
+      if (contactData?.id) {
+        deletionResults.contactsSearched++
+        logger.info('Found SendGrid contact', { email, contactId: contactData.id })
+
+        // Step 2: Delete the contact (async operation - returns job_id)
+        try {
+          const [deleteResponse] = await sgClient.request({
+            url: `/v3/marketing/contacts?ids=${contactData.id}`,
+            method: 'DELETE'
+          })
+          const jobId = (deleteResponse.body as any)?.job_id
+          deletionResults.contactsDeleted++
+          logger.info('SendGrid contact deletion initiated', { 
+            email, 
+            contactId: contactData.id,
+            jobId,
+            note: 'SendGrid processes deletions asynchronously'
+          })
+        } catch (deleteErr: any) {
+          deletionResults.errors.push(`Delete contact ${email}: ${deleteErr.message}`)
+          logger.error('SendGrid delete failed', { email, error: deleteErr.message })
         }
+      } else {
+        logger.info('No SendGrid contact found', { email })
       }
 
       // Step 3: Add to global suppression list (ensures no future emails)

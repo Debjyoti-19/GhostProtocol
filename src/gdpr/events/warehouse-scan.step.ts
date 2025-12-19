@@ -95,29 +95,45 @@ export async function handler(input: WarehouseScanInput, { emit, logger }: any):
       })
     }
 
+    // Define finding type
+    interface PIIFinding {
+      confidence: number
+      location: string
+      type: string
+      value?: string
+    }
+
     // Create a simplified job manager for this step
     const jobManager = {
       createJob: async (options: any) => ({
         jobId: uuidv4(),
         type: options.type,
         workflowId: options.workflowId,
-        status: 'PENDING' as const,
+        status: 'PENDING' as 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED',
         progress: 0,
-        checkpoints: [],
-        findings: []
+        checkpoints: [] as string[],
+        findings: [] as PIIFinding[]
       }),
       startJob: async (jobId: string) => {
         logger?.info('Starting background job', { jobId })
         // In a real implementation, this would start the actual scanning process
         return Promise.resolve()
       },
-      getJobStatus: async (jobId: string) => {
+      getJobStatus: async (jobId: string): Promise<{
+        jobId: string
+        type: string
+        workflowId: string
+        status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+        progress: number
+        checkpoints: string[]
+        findings: PIIFinding[]
+      }> => {
         // Mock job status - in a real implementation, this would fetch from storage
         return {
           jobId,
-          type: 'WAREHOUSE_SCAN' as const,
+          type: 'WAREHOUSE_SCAN',
           workflowId,
-          status: 'RUNNING' as const,
+          status: 'RUNNING',
           progress: Math.floor(Math.random() * 100), // Mock progress
           checkpoints: [],
           findings: [] // Mock findings array

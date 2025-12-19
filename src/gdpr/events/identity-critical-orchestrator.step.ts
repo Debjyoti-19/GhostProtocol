@@ -25,7 +25,7 @@ export const config = {
   description: 'Orchestrate identity-critical deletion steps with sequential ordering enforcement',
   flows: ['erasure-workflow'],
   subscribes: ['workflow-created'],
-  emits: ['stripe-deletion', 'audit-log'],
+  emits: ['stripe-deletion', 'minio-storage-deletion', 'audit-log'],
   input: IdentityCriticalOrchestratorInputSchema
 }
 
@@ -67,12 +67,29 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
 
   logger.info('Stripe deletion event emitted successfully', { workflowId })
 
+  // Trigger MinIO storage scan as independent background job
+  // This runs in parallel with the main deletion chain
+  logger.info('Triggering MinIO storage background job', { workflowId })
+  
+  await emit({
+    topic: 'minio-storage-deletion',
+    data: {
+      workflowId,
+      userIdentifiers,
+      stepName: 'minio-storage-deletion',
+      attempt: 1
+    }
+  })
+
+  logger.info('MinIO background job triggered', { workflowId })
+
   // Emit audit log
   await emit({
     topic: 'audit-log',
     data: {
       event: 'ORCHESTRATION_STARTED',
       workflowId,
+      backgroundJobs: ['minio-storage-deletion'],
       timestamp
     }
   })

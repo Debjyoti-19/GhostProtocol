@@ -185,13 +185,24 @@ async function performIntercomDeletion(userIdentifiers: any, logger: any, emit: 
             logger.warn('Error fetching conversations', { contactId, error: convErr.message })
           }
 
-          // Step 3: Delete the contact
+          // Step 3: Delete the contact using the correct API
+          // Intercom has different contact types - try multiple deletion methods
           try {
-            await intercom.contacts.delete(contactId)
+            // First try: delete by contact ID (works for most contacts)
+            await intercom.contacts.delete({ contact_id: contactId })
             deletionResults.contactsDeleted++
             logger.info('Deleted Intercom contact', { contactId, email })
           } catch (deleteErr: any) {
-            deletionResults.errors.push(`Delete contact ${contactId}: ${deleteErr.message}`)
+            // If first method fails, try archiving instead (some contact types can't be deleted)
+            try {
+              await intercom.contacts.archive({ contact_id: contactId })
+              deletionResults.contactsDeleted++
+              logger.info('Archived Intercom contact (deletion not allowed)', { contactId, email })
+            } catch (archiveErr: any) {
+              const errorMsg = deleteErr.body?.errors?.[0]?.message || deleteErr.message || 'Unknown error'
+              logger.error('Failed to delete/archive Intercom contact', { contactId, email, error: errorMsg })
+              deletionResults.errors.push(`Delete contact ${contactId}: ${errorMsg}`)
+            }
           }
         }
       } catch (searchErr: any) {

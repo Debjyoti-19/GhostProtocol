@@ -250,28 +250,57 @@ async function performStripeDeletion(
 
     for (const email of userIdentifiers.emails) {
       try {
+        // Try search API first
+        logger.info('Searching for Stripe customer', { email })
         const customers = await stripe.customers.search({ query: `email:'${email}'` })
         
+        logger.info('Stripe search results', { email, count: customers.data.length })
+
+        if (customers.data.length === 0) {
+          // Fallback: list all customers and filter (for recently created customers)
+          logger.info('No results from search, trying list API', { email })
+          const allCustomers = await stripe.customers.list({ email, limit: 10 })
+          customers.data.push(...allCustomers.data)
+          logger.info('List API results', { email, count: allCustomers.data.length })
+        }
+        
         for (const customer of customers.data) {
+          logger.info('Processing customer for deletion', { customerId: customer.id, email: customer.email })
+
           // Cancel subscriptions
-          const subs = await stripe.subscriptions.list({ customer: customer.id, status: 'active' })
-          for (const sub of subs.data) {
-            await stripe.subscriptions.cancel(sub.id)
-            deletedResources.subscriptions++
+          try {
+            const subs = await stripe.subscriptions.list({ customer: customer.id, status: 'active' })
+            for (const sub of subs.data) {
+              await stripe.subscriptions.cancel(sub.id)
+              deletedResources.subscriptions++
+              logger.info('Cancelled subscription', { subId: sub.id })
+            }
+          } catch (subErr: any) {
+            logger.warn('Error cancelling subscriptions', { error: subErr.message })
           }
 
           // Detach payment methods
-          const pms = await stripe.paymentMethods.list({ customer: customer.id })
-          for (const pm of pms.data) {
-            await stripe.paymentMethods.detach(pm.id)
-            deletedResources.paymentMethods++
+          try {
+            const pms = await stripe.paymentMethods.list({ customer: customer.id })
+            for (const pm of pms.data) {
+              await stripe.paymentMethods.detach(pm.id)
+              deletedResources.paymentMethods++
+              logger.info('Detached payment method', { pmId: pm.id })
+            }
+          } catch (pmErr: any) {
+            logger.warn('Error detaching payment methods', { error: pmErr.message })
           }
 
           // Delete customer
-          const deleted = await stripe.customers.del(customer.id)
-          if (deleted.deleted) {
-            deletedResources.customer = true
-            results.push({ customerId: customer.id, email: customer.email, deleted: true })
+          try {
+            const deleted = await stripe.customers.del(customer.id)
+            if (deleted.deleted) {
+              deletedResources.customer = true
+              results.push({ customerId: customer.id, email: customer.email, deleted: true })
+              logger.info('Deleted Stripe customer', { customerId: customer.id })
+            }
+          } catch (delErr: any) {
+            logger.warn('Error deleting customer', { customerId: customer.id, error: delErr.message })
           }
         }
       } catch (e: any) {
@@ -281,11 +310,40 @@ async function performStripeDeletion(
 
     const receipt = `stripe_del_${Date.now()}_${userIdentifiers.userId.slice(0, 8)}`
 
+    // CRITICAL: Forward-only saga - must verify deletion actually happened
+    // If no customer was found/deleted, this is a FAILURE (data might still exist)
+    const actuallyDeleted = deletedResources.customer || results.length > 0
+
     logger.info('Stripe API response received', {
-      success: true,
+      success: actuallyDeleted,
       deletedResources,
+      customersFound: results.length,
       isTestMode
     })
+
+    if (!actuallyDeleted) {
+      // No customer found - could be:
+      // 1. Customer doesn't exist (OK for GDPR - nothing to delete)
+      // 2. Search API indexing delay (NOT OK - retry needed)
+      // We treat "no customer found" as success only if we're confident they don't exist
+      // For safety in forward-only saga, we should retry to be sure
+      logger.warn('No Stripe customer found to delete - may need retry', {
+        emails: userIdentifiers.emails,
+        searchResults: results.length
+      })
+      
+      return {
+        success: false,
+        error: 'No Stripe customer found - search may have indexing delay',
+        apiResponse: {
+          deletedCustomers: results,
+          deletedResources,
+          timestamp,
+          isTestMode,
+          hint: 'Stripe search API has indexing delay for new customers'
+        }
+      }
+    }
 
     return {
       success: true,

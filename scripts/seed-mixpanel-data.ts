@@ -32,7 +32,7 @@ const TEST_USERS = [
 
 async function seedMixpanelData() {
   console.log('🚀 Seeding Mixpanel Test Data')
-  console.log('=' .repeat(50))
+  console.log('='.repeat(50))
 
   try {
     const Mixpanel = (await import('mixpanel')).default
@@ -43,7 +43,7 @@ async function seedMixpanelData() {
 
     // Create test user profiles
     console.log('\n👤 Creating test user profiles...')
-    
+
     for (const user of TEST_USERS) {
       try {
         // Set user profile
@@ -79,7 +79,7 @@ async function seedMixpanelData() {
     console.log('\n⏳ Waiting for data to sync (3s)...')
     await new Promise(r => setTimeout(r, 3000))
 
-    console.log('\n' + '=' .repeat(50))
+    console.log('\n' + '='.repeat(50))
     console.log('📊 Summary:')
     console.log(`   Users created: ${TEST_USERS.length}`)
     console.log(`   Events tracked: ${TEST_USERS.length * 2}`)

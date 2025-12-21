@@ -29,6 +29,14 @@ const TEST_USER = {
   address: '123 Main Street, New York, NY 10001'
 }
 
+const TEST_USER_2 = {
+  email: 'soumyadeepbhoumik@gmail.com',
+  phone: '+1-666-555-4444',
+  name: 'Soumyadeep Bhoumik',
+  ssn: '987-65-4321',
+  address: '789 Park Avenue, Mumbai, India'
+}
+
 const TEST_MESSAGES = [
   `Hey team, please contact me at ${TEST_USER.email} for the project details.`,
   `My phone number is ${TEST_USER.phone}, call me anytime!`,
@@ -39,12 +47,14 @@ const TEST_MESSAGES = [
   `The quarterly report is ready for review.`,
   `Can someone help me with the deployment?`,
   `My personal email for emergencies: ${TEST_USER.email}`,
-  `Contact ${TEST_USER.name} at ${TEST_USER.phone} for urgent matters.`
+  `Contact ${TEST_USER.name} at ${TEST_USER.phone} for urgent matters.`,
+  `Also reach out to ${TEST_USER_2.name} at ${TEST_USER_2.email}`,
+  `${TEST_USER_2.name}'s phone is ${TEST_USER_2.phone} for backup contact.`
 ]
 
 async function seedSlackData() {
   console.log('🚀 Seeding Slack Test Data')
-  console.log('=' .repeat(50))
+  console.log('='.repeat(50))
 
   try {
     // Get bot info
@@ -67,7 +77,7 @@ async function seedSlackData() {
     }
 
     // Find a channel to post test messages
-    const targetChannel = channelsResult.channels.find(ch => ch.is_member) 
+    const targetChannel = channelsResult.channels.find(ch => ch.is_member)
       || channelsResult.channels[0]
 
     if (!targetChannel?.id) {
@@ -93,9 +103,9 @@ async function seedSlackData() {
 
     // Post test messages
     console.log('\n📝 Posting test messages with PII...\n')
-    
+
     const postedMessages: string[] = []
-    
+
     for (let i = 0; i < TEST_MESSAGES.length; i++) {
       const message = TEST_MESSAGES[i]
       try {
@@ -103,13 +113,13 @@ async function seedSlackData() {
           channel: targetChannel.id,
           text: message
         })
-        
+
         if (result.ok && result.ts) {
           postedMessages.push(result.ts)
           const preview = message.length > 50 ? message.slice(0, 50) + '...' : message
           console.log(`  ✅ Message ${i + 1}: "${preview}"`)
         }
-        
+
         // Small delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 500))
       } catch (err: any) {
@@ -117,12 +127,12 @@ async function seedSlackData() {
       }
     }
 
-    console.log('\n' + '=' .repeat(50))
+    console.log('\n' + '='.repeat(50))
     console.log('📊 Summary:')
     console.log(`   Messages posted: ${postedMessages.length}`)
     console.log(`   Channel: #${targetChannel.name}`)
     console.log(`   Bot User ID: ${botUserId}`)
-    
+
     console.log('\n🧪 Test User Data:')
     console.log(`   Email: ${TEST_USER.email}`)
     console.log(`   Phone: ${TEST_USER.phone}`)

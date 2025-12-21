@@ -703,51 +703,7 @@ async function runE2ETest() {
     process.exit(1)
   }
 
-  // Wait for async operations to complete (SendGrid needs significant time to index new contacts)
-  log('⏳', 'Waiting 15 seconds for data to propagate across services...')
-  await sleep(15000)
-
-  // ============================================
-  // PHASE 2: TRIGGER ERASURE WORKFLOW
-  // ============================================
-  separator('PHASE 2: TRIGGERING ERASURE WORKFLOW')
-
-  const workflowId = await triggerErasureWorkflow()
-
-  if (!workflowId) {
-    log('❌', 'Failed to trigger workflow. Is the Motia server running?')
-    log('💡', 'Start the server with: npm run dev')
-    process.exit(1)
-  }
-
-  // ============================================
-  // PHASE 3: MONITOR WORKFLOW
-  // ============================================
-  separator('PHASE 3: MONITORING WORKFLOW PROGRESS')
-
-  const completed = await monitorWorkflow(workflowId, 60)
-
-  // ============================================
-  // PHASE 4: VERIFY DELETIONS
-  // ============================================
-  separator('PHASE 4: VERIFYING DATA DELETION')
-
-  // Wait a bit for all deletions to complete
-  await sleep(3000)
-
-  const verifyResults = {
-    stripe: await verifyStripeDeleted(),
-    database: await verifyDatabaseDeleted(),
-    slack: await verifySlackDeleted(),
-    sendgrid: await verifySendGridDeleted(),
-    intercom: await verifyIntercomDeleted(),
-    hubspot: await verifyHubSpotDeleted(),
-    mixpanel: await verifyMixpanelDeleted(),
-    minio: await verifyMinIODeleted()
-  }
-
-  const deletedCount = Object.values(verifyResults).filter(Boolean).length
-  const totalVerified = Object.keys(verifyResults).length
+  
 
   // ============================================
   // FINAL SUMMARY

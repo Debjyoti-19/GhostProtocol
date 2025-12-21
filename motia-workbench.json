@@ -122,100 +122,68 @@
         "y": 739
       },
       "src\\gdpr\\events\\warehouse-scan.step.ts": {
-        "x": 4100,
-        "y": 29
+        "x": 3917,
+        "y": 177
       },
       "src\\gdpr\\events\\stripe-deletion.step.ts": {
-        "x": 282,
-        "y": 620
+        "x": 470,
+        "y": 663
       },
       "src\\gdpr\\events\\spawn-parallel-workflow.step.ts": {
         "x": 2148,
-        "y": 822
+        "y": 1161
       },
-      "src\\gdpr\\events\\sendgrid-deletion.step.ts": {
-        "x": 2723,
-        "y": 729
+      "src\\gdpr\\events\\slack-deletion.step.ts": {
+        "x": 1272,
+        "y": 518
       },
       "src\\gdpr\\events\\s3-cold-storage-scan.step.ts": {
-        "x": 4037,
-        "y": 1602
+        "x": 3701,
+        "y": 1475
+      },
+      "src\\gdpr\\events\\minio-storage-deletion.step.ts": {
+        "x": 4550,
+        "y": 312
       },
       "src\\gdpr\\events\\intercom-deletion.step.ts": {
-        "x": 2713,
-        "y": 485
+        "x": 2002,
+        "y": 245
       },
       "src\\gdpr\\events\\identity-critical-orchestrator.step.ts": {
         "x": 1267,
         "y": 1332
       },
+      "src\\gdpr\\events\\email-deletion.step.ts": {
+        "x": 1783,
+        "y": 885
+      },
       "src\\gdpr\\events\\database-deletion.step.ts": {
-        "x": 861,
-        "y": 842
+        "x": 884,
+        "y": 812
       },
       "src\\gdpr\\events\\crm-deletion.step.ts": {
-        "x": 3310,
-        "y": 945
+        "x": 3319,
+        "y": 871
       },
       "src\\gdpr\\events\\checkpoint-validation.step.ts": {
-        "x": 3382,
-        "y": 777
+        "x": 3270,
+        "y": 34
       },
       "src\\gdpr\\events\\audit-logger.step.ts": {
-        "x": 4433,
-        "y": 404
+        "x": 4541,
+        "y": 1077
+      },
+      "src\\gdpr\\events\\analytics-deletion.step.ts": {
+        "x": 2715,
+        "y": 1236
       },
       "src\\gdpr\\cron\\zombie-data-check.step.ts": {
         "x": 5020,
         "y": 705
       },
       "src\\gdpr\\api\\create-erasure-request.step.ts": {
-        "x": 120,
-        "y": 1090
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\database-deletion.step.js": {
-        "x": 1400,
-        "y": 1362
-      },
-      "src\\gdpr\\events\\slack-deletion.step.ts": {
-        "x": 1272,
-        "y": 821
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\slack-deletion.step.js": {
-        "x": 2100,
-        "y": 1274
-      },
-      "src\\gdpr\\events\\email-deletion.step.ts": {
-        "x": 1728,
-        "y": 817
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\email-deletion.step.js": {
-        "x": 2697,
-        "y": 1107
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\intercom-deletion.step.js": {
-        "x": 3850,
-        "y": 512
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\crm-deletion.step.js": {
-        "x": 3879,
-        "y": 1079
-      },
-      "src\\gdpr\\events\\analytics-deletion.step.ts": {
-        "x": 2715,
-        "y": 1236
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\analytics-deletion.step.js": {
-        "x": 3864,
-        "y": 1230
-      },
-      "src\\gdpr\\events\\minio-storage-deletion.step.ts": {
-        "x": 4550,
-        "y": 312
-      },
-      "src\\.motia\\compiled\\gdpr\\events\\minio-storage-deletion.step.js": {
-        "x": 4900,
-        "y": 312
+        "x": 1854,
+        "y": 1694
       }
     }
   }

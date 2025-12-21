@@ -42,8 +42,8 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
   const timestamp = new Date().toISOString()
   const jobId = uuidv4()
 
-  logger.info('Starting MinIO storage background job', { 
-    workflowId, 
+  logger.info('Starting MinIO storage background job', {
+    workflowId,
     jobId,
     userId: userIdentifiers.userId,
     attempt,
@@ -81,8 +81,8 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
     })
 
     if (minioResult.success) {
-      logger.info('MinIO background job completed', { 
-        workflowId, 
+      logger.info('MinIO background job completed', {
+        workflowId,
         jobId,
         filesDeleted: minioResult.apiResponse?.filesDeleted,
         bytesFreed: minioResult.apiResponse?.bytesFreed,
@@ -106,13 +106,13 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
         }
       })
 
-      await emit({ 
-        topic: 'audit-log', 
-        data: { 
-          event: 'MINIO_BACKGROUND_JOB_COMPLETED', 
-          workflowId, 
+      await emit({
+        topic: 'audit-log',
+        data: {
+          event: 'MINIO_BACKGROUND_JOB_COMPLETED',
+          workflowId,
           jobId,
-          stepName, 
+          stepName,
           timestamp: new Date().toISOString(),
           receipt: minioResult.receipt,
           filesDeleted: minioResult.apiResponse?.filesDeleted,
@@ -123,10 +123,10 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
     } else {
       const maxRetries = 3
       const errorMsg = (minioResult as any).error || 'Unknown error'
-      
+
       if (attempt < maxRetries) {
         logger.warn('MinIO background job failed, scheduling retry', { workflowId, jobId, attempt, error: errorMsg })
-        
+
         await emit({
           topic: 'background-job-progress',
           data: {
@@ -144,7 +144,7 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
         await emit({ topic: 'minio-storage-deletion', data: { ...parsed, attempt: attempt + 1 } })
       } else {
         logger.error('MinIO background job failed after max retries', { workflowId, jobId, error: errorMsg })
-        
+
         await emit({
           topic: 'background-job-progress',
           data: {
@@ -172,7 +172,7 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
 
   } catch (error: any) {
     logger.error('MinIO background job error', { workflowId, jobId, error: error.message })
-    
+
     await emit({
       topic: 'background-job-progress',
       data: {
@@ -188,7 +188,7 @@ export async function handler(data: any, { emit, logger }: any): Promise<void> {
 }
 
 async function performMinIODeletion(
-  userIdentifiers: any, 
+  userIdentifiers: any,
   logger: any,
   onProgress?: (progress: number, details: any) => Promise<void>
 ) {
@@ -253,7 +253,7 @@ async function performMinIODeletion(
       ...userIdentifiers.emails,
       ...userIdentifiers.aliases
     ].filter(Boolean)
-    
+
     // Generate multiple pattern variations for each identifier
     const userPatterns: string[] = []
     for (const p of rawPatterns) {
@@ -263,14 +263,35 @@ async function performMinIODeletion(
       userPatterns.push(lower.replace(/[@.]/g, '_'))  // email@domain.com -> email_domain_com
       userPatterns.push(lower.replace(/ /g, '_'))     // "E2E Test User" -> "e2e_test_user"
       userPatterns.push(lower.replace(/[^a-z0-9]/g, '_')) // any special char -> underscore
+
       // For emails, also match the local part (before @)
       if (p.includes('@')) {
         const localPart = p.split('@')[0].toLowerCase()
         userPatterns.push(localPart)
         userPatterns.push(localPart.replace(/\./g, '_'))
+        userPatterns.push(localPart.replace(/[^a-z0-9]/g, '_'))
+      }
+
+      // For names with spaces, extract individual words
+      if (p.includes(' ')) {
+        const words = p.toLowerCase().split(/\s+/)
+        words.forEach((word: string) => {
+          if (word.length > 2) { // Only meaningful words
+            userPatterns.push(word)
+            userPatterns.push(word.replace(/[^a-z0-9]/g, '_'))
+          }
+        })
       }
     }
-    logger.info('MinIO user patterns', { patterns: userPatterns.slice(0, 8) })
+
+    // Remove duplicates
+    const uniquePatterns = [...new Set(userPatterns)]
+
+    logger.info('MinIO user patterns generated', {
+      count: uniquePatterns.length,
+      patterns: uniquePatterns,
+      rawIdentifiers: rawPatterns
+    })
 
     const totalObjects = objects.length
 
@@ -290,14 +311,22 @@ async function performMinIODeletion(
       }
 
       // Check if file belongs to user (by name pattern)
-      const isUserFile = userPatterns.some(pattern => 
+      const matchingPatterns = uniquePatterns.filter(pattern =>
         objectName.includes(pattern.replace(/[@.]/g, '_')) ||
         objectName.includes(pattern)
       )
 
+      const isUserFile = matchingPatterns.length > 0
+
       if (isUserFile) {
         deletionResults.userFilesFound.push(obj.name)
-        
+
+        logger.info('File matched for deletion', {
+          file: obj.name,
+          matchedPatterns: matchingPatterns.slice(0, 5),
+          size: obj.size
+        })
+
         try {
           await minioClient.removeObject(bucket, obj.name)
           deletionResults.filesDeleted++
@@ -334,15 +363,15 @@ async function performMinIODeletion(
 }
 
 async function performMockMinIODeletion(
-  userIdentifiers: any, 
+  userIdentifiers: any,
   logger: any,
   onProgress?: (progress: number, details: any) => Promise<void>
 ) {
   logger.info('Running mock MinIO background job', { userId: userIdentifiers.userId })
-  
+
   // Simulate scanning progress
   const mockFiles = ['user_data.json', 'profile_backup.zip', 'exports/user_001.csv']
-  
+
   for (let i = 0; i <= 100; i += 20) {
     if (onProgress) {
       await onProgress(i, {

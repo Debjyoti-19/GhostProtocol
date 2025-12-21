@@ -62,12 +62,38 @@ const TEST_FILES = [
   {
     name: 'shared/team_notes.md',
     content: '# Team Notes\nNo PII here'
+  },
+  {
+    name: 'users/soumyadeep_user/profile.json',
+    content: JSON.stringify({
+      userId: 'soumyadeep_user',
+      email: 'soumyadeepbhoumik@gmail.com',
+      name: 'Soumyadeep Bhoumik',
+      phone: '+1-666-555-4444',
+      created: new Date().toISOString()
+    }, null, 2)
+  },
+  {
+    name: 'users/soumyadeep_user/settings.json',
+    content: JSON.stringify({
+      theme: 'light',
+      notifications: false,
+      language: 'en-IN'
+    }, null, 2)
+  },
+  {
+    name: 'exports/soumyadeep_bhoumik_export_2024.csv',
+    content: 'id,email,name\n2,soumyadeepbhoumik@gmail.com,Soumyadeep Bhoumik'
+  },
+  {
+    name: 'backups/soumyadeepbhoumik@gmail.com',
+    content: 'MOCK_BACKUP_DATA_FOR_USER_soumyadeepbhoumik@gmail.com'
   }
 ]
 
 async function seedMinIOData() {
   console.log('🚀 Seeding MinIO Test Data')
-  console.log('=' .repeat(50))
+  console.log('='.repeat(50))
 
   try {
     const Minio = await import('minio')
@@ -86,7 +112,7 @@ async function seedMinIOData() {
     // Create bucket if it doesn't exist
     console.log('\n📦 Checking bucket...')
     const bucketExists = await minioClient.bucketExists(MINIO_BUCKET)
-    
+
     if (!bucketExists) {
       await minioClient.makeBucket(MINIO_BUCKET)
       console.log(`   ✅ Created bucket: ${MINIO_BUCKET}`)
@@ -96,7 +122,7 @@ async function seedMinIOData() {
 
     // Upload test files
     console.log('\n📁 Uploading test files...')
-    
+
     let uploadedCount = 0
     for (const file of TEST_FILES) {
       try {
@@ -121,18 +147,19 @@ async function seedMinIOData() {
     })
 
     for (const obj of objects) {
-      const isUserFile = obj.name.includes('gdpr_test') || 
-                         obj.name.includes('john_doe') ||
-                         obj.name.includes('ghostprotocol')
+      const isUserFile = obj.name.includes('gdpr_test') ||
+        obj.name.includes('john_doe') ||
+        obj.name.includes('ghostprotocol') ||
+        obj.name.includes('soumyadeep')
       console.log(`   ${isUserFile ? '🔴' : '⚪'} ${obj.name} (${obj.size} bytes)`)
     }
 
-    console.log('\n' + '=' .repeat(50))
+    console.log('\n' + '='.repeat(50))
     console.log('📊 Summary:')
     console.log(`   Files uploaded: ${uploadedCount}`)
     console.log(`   Total in bucket: ${objects.length}`)
-    console.log(`   User files (🔴): ${objects.filter(o => 
-      o.name.includes('gdpr_test') || o.name.includes('john_doe') || o.name.includes('ghostprotocol')
+    console.log(`   User files (🔴): ${objects.filter(o =>
+      o.name.includes('gdpr_test') || o.name.includes('john_doe') || o.name.includes('ghostprotocol') || o.name.includes('soumyadeep')
     ).length}`)
 
     console.log('\n✅ MinIO test data seeded!')

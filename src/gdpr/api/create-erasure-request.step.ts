@@ -46,17 +46,26 @@ const RequestedBySchema = z.object({
   organization: z.string().min(1, 'Organization is required')
 })
 
-const ErasureRequestBodySchema = z.object({
+const ErasureRequestBodySchema = z.union([
+  // Simple format: just an email string
+  z.string().email('Must be a valid email address'),
+  // Full format: complete request object
+  z.object({
+    userIdentifiers: UserIdentifiersSchema,
+    legalProof: LegalProofSchema,
+    jurisdiction: z.enum(['EU', 'US', 'OTHER']),
+    requestedBy: RequestedBySchema
+  })
+])
+
+const ErasureRequestResponseSchema = z.object({
+  requestId: z.string().uuid(),
+  workflowId: z.string().uuid(),
+  createdAt: z.string().datetime(),
   userIdentifiers: UserIdentifiersSchema,
   legalProof: LegalProofSchema,
   jurisdiction: z.enum(['EU', 'US', 'OTHER']),
   requestedBy: RequestedBySchema
-})
-
-const ErasureRequestResponseSchema = ErasureRequestBodySchema.extend({
-  requestId: z.string().uuid(),
-  workflowId: z.string().uuid(),
-  createdAt: z.string().datetime()
 })
 
 export const config: ApiRouteConfig = {
@@ -64,7 +73,7 @@ export const config: ApiRouteConfig = {
   type: 'api',
   path: '/erasure-request',
   method: 'POST',
-  description: 'Initiate new erasure workflow with identity validation and concurrency control',
+  description: 'Initiate new erasure workflow - accepts either email string or full request body',
   middleware: [
     authMiddleware,
     requireRole('compliance_officer')
@@ -94,8 +103,41 @@ export const config: ApiRouteConfig = {
 
 export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, logger, state }) => {
   try {
-    // Parse and validate request body
-    const requestData = ErasureRequestBodySchema.parse(req.body)
+    // Parse request body - could be string or object
+    const rawBody = ErasureRequestBodySchema.parse(req.body)
+
+    // Normalize to full request format
+    let requestData
+    if (typeof rawBody === 'string') {
+      // Simple email format - create defaults
+      const email = rawBody
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substring(7)}`
+
+      logger.info('Simple email format detected, creating default request', { email, userId })
+
+      requestData = {
+        userIdentifiers: {
+          userId,
+          emails: [email],
+          phones: [],
+          aliases: []
+        },
+        legalProof: {
+          type: 'SIGNED_REQUEST' as const,
+          evidence: 'Email-based request',
+          verifiedAt: new Date().toISOString()
+        },
+        jurisdiction: 'EU' as const,
+        requestedBy: {
+          userId: 'system',
+          role: 'compliance_officer',
+          organization: 'auto-generated'
+        }
+      }
+    } else {
+      // Full format - use as is
+      requestData = rawBody
+    }
 
     // Normalize datetime
     try {
@@ -108,14 +150,14 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
     // Basic validation for emails and phones (lenient)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     const phoneRegex = /^\+?[\d\s\-\(\)]+$/
-    
+
     const invalidEmails = requestData.userIdentifiers.emails.filter(email => !emailRegex.test(email))
     const invalidPhones = requestData.userIdentifiers.phones.filter(phone => !phoneRegex.test(phone))
-    
+
     if (invalidEmails.length > 0) {
       logger.warn('Some emails may be invalid', { invalidEmails })
     }
-    
+
     if (invalidPhones.length > 0) {
       logger.warn('Some phones may be invalid', { invalidPhones })
     }
@@ -124,10 +166,10 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
     const workflowId = uuidv4()
     const createdAt = new Date().toISOString()
 
-    logger.info('Processing erasure request', { 
-      requestId, 
+    logger.info('Processing erasure request', {
+      requestId,
       userIdentifiers: requestData.userIdentifiers,
-      jurisdiction: requestData.jurisdiction 
+      jurisdiction: requestData.jurisdiction
     })
 
     // Check for existing workflows using user identifiers
@@ -135,14 +177,14 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
     logger.info('Checking for existing lock', { userKey })
     const existingLock = await state.get(userKey)
     logger.info('Lock check complete', { existingLock })
-    
+
     if (existingLock) {
-      logger.warn('Concurrent workflow detected', { 
-        requestId, 
+      logger.warn('Concurrent workflow detected', {
+        requestId,
         existingWorkflowId: existingLock.workflowId,
-        userId: requestData.userIdentifiers.userId 
+        userId: requestData.userIdentifiers.userId
       })
-      
+
       // Emit audit log for duplicate request
       await emit({
         topic: 'audit-log',
@@ -165,22 +207,22 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
       legalProof: requestData.legalProof,
       jurisdiction: requestData.jurisdiction
     })
-    
+
     if (!hashData) {
       throw new Error('Failed to create request hash: JSON.stringify returned empty')
     }
-    
+
     const requestHash = Buffer.from(hashData, 'utf-8').toString('base64')
 
     // Check for duplicate requests using hash
     const hashKey = `request_hash:${requestHash}`
     const existingRequest = await state.get(hashKey)
-    
+
     if (existingRequest) {
-      logger.info('Duplicate request detected via hash', { 
-        requestId, 
+      logger.info('Duplicate request detected via hash', {
+        requestId,
         existingRequestId: existingRequest.requestId,
-        existingWorkflowId: existingRequest.workflowId 
+        existingWorkflowId: existingRequest.workflowId
       })
 
       // Emit audit log for deduplication
@@ -208,19 +250,19 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
 
     // Acquire per-user lock
     logger.info('Setting user lock', { userKey, workflowId, requestId })
-    await state.set(userKey, { 
-      workflowId, 
-      requestId, 
-      lockedAt: createdAt 
+    await state.set(userKey, {
+      workflowId,
+      requestId,
+      lockedAt: createdAt
     }, { ttl: 86400 }) // 24 hour TTL
     logger.info('User lock set successfully')
 
     // Store request hash for idempotency
     logger.info('Setting request hash', { hashKey })
-    await state.set(hashKey, { 
-      requestId, 
-      workflowId, 
-      createdAt 
+    await state.set(hashKey, {
+      requestId,
+      workflowId,
+      createdAt
     }, { ttl: 86400 }) // 24 hour TTL
     logger.info('Request hash set successfully')
 
@@ -256,7 +298,7 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
 
     // Store workflow state
     logger.info('Setting workflow state', { workflowId, stateKeys: Object.keys(initialWorkflowState) })
-    
+
     // Try to serialize to check for issues
     try {
       const serialized = JSON.stringify(initialWorkflowState)
@@ -265,10 +307,10 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
       logger.error('Failed to serialize workflow state', { error: serError })
       throw serError
     }
-    
+
     await state.set(`workflow:${workflowId}`, initialWorkflowState, {})
     logger.info('Workflow state set successfully')
-    
+
     // Add workflow to the list for efficient querying
     const workflowList = await state.get('workflow_list') || []
     workflowList.push(workflowId)
@@ -279,10 +321,10 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
     await state.set(`request:${requestId}`, erasureRequest, {})
     logger.info('Erasure request set successfully')
 
-    logger.info('Erasure request created successfully', { 
-      requestId, 
+    logger.info('Erasure request created successfully', {
+      requestId,
       workflowId,
-      userId: requestData.userIdentifiers.userId 
+      userId: requestData.userIdentifiers.userId
     })
 
     // Emit workflow creation event
@@ -332,7 +374,7 @@ export const handler: Handlers['CreateErasureRequest'] = async (req, { emit, log
       }
     }
 
-    logger.error('Failed to create erasure request', { 
+    logger.error('Failed to create erasure request', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       errorType: error?.constructor?.name

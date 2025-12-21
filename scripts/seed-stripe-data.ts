@@ -95,6 +95,23 @@ const mockUsers = [
       plan: 'premium',
       gdprDemo: 'true'
     }
+  },
+  {
+    email: 'soumyadeepbhoumik@gmail.com',
+    name: 'Soumyadeep Bhoumik',
+    phone: '+1666555444',
+    address: {
+      line1: '505 Innovation Drive',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      postal_code: '400001',
+      country: 'IN'
+    },
+    metadata: {
+      userId: 'user_005',
+      signupDate: '2024-07-15',
+      plan: 'enterprise'
+    }
   }
 ]
 
@@ -162,9 +179,9 @@ async function seedStripeData() {
 
 async function listAllCustomers() {
   console.log('\n📋 Current Stripe customers:\n')
-  
+
   const customers = await stripe.customers.list({ limit: 20 })
-  
+
   if (customers.data.length === 0) {
     console.log('   No customers found. Run seed first.')
     return

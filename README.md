@@ -62,7 +62,8 @@ graph TD
     B -->|Acquire User Lock| C[Data Lineage Snapshot]
     C -->|Sequential| D[Stripe Deletion]
     D -->|Sequential| E[Database Deletion]
-    E -->|Checkpoint| F{Identity: GONE}
+    E -->|Sequential| E2[Slack Deletion]
+    E2 -->|Checkpoint| F{Identity: GONE}
     F -->|Parallel| G[Intercom Deletion]
     F -->|Parallel| H[SendGrid Deletion]
     F -->|Parallel| I[CRM Deletion]
@@ -371,53 +372,58 @@ GhostProtocol leverages Motia's core primitives to build a production-grade comp
        - Anonymize related data
        - Record transaction hash
        ↓
-    10. CheckpointValidation (Event Step)
-        - Verify both steps completed
+    10. SlackDeletion (Event Step)
+        - Delete all messages
+        - Delete files and attachments
+        - Remove user from channels
+        - Record API receipt
+       ↓
+    11. CheckpointValidation (Event Step)
+        - Verify all critical steps completed
         - Set "identity: GONE" checkpoint
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 3: PARALLEL NON-CRITICAL DELETIONS                            │
 └─────────────────────────────────────────────────────────────────────┘
-    11. SpawnParallelWorkflow triggers simultaneously:
+    12. SpawnParallelWorkflow triggers simultaneously:
         ├─→ IntercomDeletion (conversations, user data)
         ├─→ EmailDeletion (SendGrid contacts, templates)
         ├─→ CRMDeletion (customer records)
-        ├─→ AnalyticsDeletion (tracking data)
-        └─→ SlackDeletion (messages, files)
+        └─→ AnalyticsDeletion (tracking data)
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 4: BACKGROUND SCANS (Long-Running Jobs)                       │
 └─────────────────────────────────────────────────────────────────────┘
-    12. MinIOStorageDeletion (Background Job)
+    13. MinIOStorageDeletion (Background Job)
         - Scan S3-compatible storage
         - Use PII Agent for detection
         - Delete matching files
         ↓
-    13. S3ColdStorageScan (Background Job)
+    14. S3ColdStorageScan (Background Job)
         - Scan backup archives
         - Checkpoint-based resumability
         - Report findings
         ↓
-    14. WarehouseScan (Background Job)
+    15. WarehouseScan (Background Job)
         - Scan data warehouses
         - Detect PII in analytics tables
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 5: COMPLETION & CERTIFICATE GENERATION                        │
 └─────────────────────────────────────────────────────────────────────┘
-    15. WorkflowCompletion (Event Step)
+    16. WorkflowCompletion (Event Step)
         - Aggregate all step results
         - Generate Certificate of Destruction
         - Include system receipts
         - Add cryptographic signature
         - Embed data lineage snapshot
         ↓
-    16. Schedule zombie check (30 days later)
+    17. Schedule zombie check (30 days later)
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 6: ZOMBIE DATA DETECTION (Scheduled)                          │
 └─────────────────────────────────────────────────────────────────────┘
-    17. ZombieDataCheck (Cron Step - runs every 6 hours)
+    18. ZombieDataCheck (Cron Step - runs every 6 hours)
         - Check for due zombie checks
         - Re-scan all systems
         - If data found → spawn new workflow
@@ -435,16 +441,17 @@ identity-critical-orchestrator.step.ts
 stripe-deletion.step.ts
     ↓ emits: database-deletion
 database-deletion.step.ts
+    ↓ emits: slack-deletion
+slack-deletion.step.ts
     ↓ emits: checkpoint-validation
 checkpoint-validation.step.ts
     ↓ emits: spawn-parallel-workflow
 spawn-parallel-workflow.step.ts
-    ↓ emits: [intercom-deletion, email-deletion, crm-deletion, analytics-deletion, slack-deletion]
+    ↓ emits: [intercom-deletion, email-deletion, crm-deletion, analytics-deletion]
     ├─→ intercom-deletion.step.ts
     ├─→ email-deletion.step.ts
     ├─→ crm-deletion.step.ts
-    ├─→ analytics-deletion.step.ts
-    └─→ slack-deletion.step.ts
+    └─→ analytics-deletion.step.ts
     ↓ all complete → emits: workflow-completed
 workflow-completion.step.ts
     ↓ emits: zombie-check-scheduled
